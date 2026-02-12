@@ -1,10 +1,13 @@
-use anyhow::Context;
-use clap::{Parser, builder::Str};
-use ssh2::{Channel, Session};
+use clap::{Parser};
+use ssh2::{Session};
 use std::{
-    fs, io::Read, net::{IpAddr, Ipv4Addr}, path::PathBuf, time::Duration
+    io::{Write},
+    net::{IpAddr},
+    path::{PathBuf},
+    time::Duration,
 };
 use tokio::{net::TcpStream, time::timeout};
+use vpn_tool::wireguard::{self};
 
 #[derive(Parser)]
 struct Args {
@@ -14,6 +17,8 @@ struct Args {
     key_path: PathBuf,
     #[arg(short, long, default_value = "dev")]
     user: String,
+    #[arg(long, default_value = "eth0")]
+    interface: String
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -43,7 +48,7 @@ pub enum SshError {
 }
 
 async fn ping_server(addr: &IpAddr) -> bool {
-    match timeout(Duration::from_secs(3), TcpStream::connect((*addr, 80))).await {
+    match timeout(Duration::from_secs(3), TcpStream::connect((*addr, 22))).await {
         Ok(Ok(_stream)) => true,
         _ => false,
     }
@@ -89,23 +94,20 @@ async fn connect_ssh(addr: IpAddr, user: String, key_path: PathBuf) -> Result<Se
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    let addr = args.ip;
-    let key_path = args.key_path;
-    let user = args.user;
-
-    if ping_server(&addr).await {
-        println!("Server {} is reachable for user {}!", addr, user);
-    } else {
-        eprintln!("Could not reach server.");
+    if !ping_server(&args.ip).await {
+        anyhow::bail!("Could not reach server at {}. Is Port 22 open?", args.ip);
     }
+    println!("Server is reachable");
 
-    validate_key_file(&key_path)?;
+    validate_key_file(&args.key_path)?;
+    println!("SSH Key validated");
 
-    let session = connect_ssh(addr.clone(), user.clone(), key_path.clone()).await?;
+    let mut session = connect_ssh(args.ip, args.user, args.key_path).await?;
+    println!("SSH connection established");
 
-    let mut channel = session.channel_session().unwrap();
-
-    channel.wait_close();
+    wireguard::setup_wireguard(&session, &args.interface)?;
+    
+    println!("Setup complete");
 
     Ok(())
 }
