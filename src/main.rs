@@ -105,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
     let mut session = connect_ssh(args.ip, args.user, args.key_path).await?;
     println!("SSH connection established");
 
-    wireguard::setup_wireguard(&session, &args.interface)?;
+    wireguard::setup_wireguard(&session, &args.ip, &args.interface)?;
     
     println!("Setup complete");
 

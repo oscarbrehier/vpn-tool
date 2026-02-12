@@ -1,21 +1,19 @@
-use std::{io::Write, path::Path};
+use crate::ssh::run_remote_cmd;
 use anyhow::Context;
 use base64::{Engine, engine::general_purpose};
-use ssh2::{Session};
-use x25519_dalek::{PublicKey, StaticSecret};
-use crate::ssh::run_remote_cmd;
 use rand_core::OsRng;
+use ssh2::Session;
+use std::{io::Write, net::IpAddr, path::Path};
+use x25519_dalek::{PublicKey, StaticSecret};
 
 fn generate_keys() -> (String, String) {
+    let secret = StaticSecret::random_from_rng(OsRng);
+    let public = PublicKey::from(&secret);
 
-	let secret = StaticSecret::random_from_rng(OsRng);
-	let public = PublicKey::from(&secret);
+    let priv_b64 = general_purpose::STANDARD.encode(secret.to_bytes());
+    let pub_b64 = general_purpose::STANDARD.encode(public.to_bytes());
 
-	let priv_b64 = general_purpose::STANDARD.encode(secret.to_bytes());
-	let pub_b64 = general_purpose::STANDARD.encode(public.to_bytes());
-
-	(priv_b64, pub_b64)
-
+    (priv_b64, pub_b64)
 }
 
 fn build_server_config(
@@ -39,6 +37,21 @@ AllowedIPs = 10.0.0.2/32
     )
 }
 
+fn build_client_config(client_priv: &str, server_pub: &str, vps_ip: &str) -> String {
+    format!(
+        r#"[Interface]
+PrivateKey = {client_priv}
+Address = 10.0.0.2/24
+DNS = 1.1.1.1
+
+[Peer]
+PublicKey = {server_pub}
+Endpoint = {vps_ip}:51820
+AllowedIPs = 0.0.0.0/0
+"#
+    )
+}
+
 fn upload_config(session: &Session, config_content: &str) -> anyhow::Result<()> {
     let remote_path = Path::new("/etc/wireguard/wg0.conf");
 
@@ -56,28 +69,31 @@ fn upload_config(session: &Session, config_content: &str) -> anyhow::Result<()> 
     Ok(())
 }
 
-pub fn setup_wireguard(session: &Session, interface: &str) -> anyhow::Result<()> {
+pub fn setup_wireguard(session: &Session, vps_ip: &IpAddr, interface: &str) -> anyhow::Result<()> {
     let (_, status) = run_remote_cmd(session, "which wg")?;
 
     if status != 0 {
-
         let (_, install_status) =
             run_remote_cmd(session, "sudo apt update && sudo apt install -y wireguard")?;
         if install_status != 0 {
             anyhow::bail!("Wireguard installation failed");
         }
     }
-	let (server_priv, server_pub) = generate_keys();
-	let (client_priv, client_pub) = generate_keys();
+    let (server_priv, server_pub) = generate_keys();
+    let (client_priv, client_pub) = generate_keys();
 
     let server_config = build_server_config(&server_priv, &client_pub, interface);
     upload_config(session, &server_config)?;
 
     run_remote_cmd(session, "sudo wg-quick up wg0")?;
 
-    println!("Server is up! Use these for your client config:");
-    println!("Client Private: {}", client_priv);
-    println!("Server Public: {}", server_pub);
+    let client_config = build_client_config(&client_priv, &server_pub, &vps_ip.to_string());
+
+    let filename = format!("wg_{}.conf", vps_ip);
+    std::fs::write(&filename, &client_config)?;
+
+    println!("Success! Configuration saved to: {}", filename);
+    println!("Import this file into Wireguard Client to connect");
 
     Ok(())
 }
