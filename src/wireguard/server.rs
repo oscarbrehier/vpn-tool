@@ -1,12 +1,25 @@
-use crate::ssh::run_remote_cmd;
+use crate::{ssh::run_remote_cmd, wireguard::state::VpnState};
 use anyhow::Context;
 use base64::{Engine, engine::general_purpose};
 use rand_core::OsRng;
 use ssh2::Session;
-use std::{io::Write, net::IpAddr, path::Path};
+use std::{fmt::format, io::Write, net::IpAddr, path::Path};
 use x25519_dalek::{PublicKey, StaticSecret};
 
-fn generate_keys() -> (String, String) {
+#[derive(Debug, thiserror::Error)]
+pub enum ServerError {
+    #[error("Remote command failed with exit code {status}: {message}")]
+    CommandFailed {
+        status: i32,
+        message: String
+    },
+    #[error("Server public key not found or empty")]
+    KeyNotFound,
+    #[error("Internal state error: {0}")]
+    State(#[from] crate::wireguard::state::StateError)
+}
+
+pub fn generate_keys() -> (String, String) {
     let secret = StaticSecret::random_from_rng(OsRng);
     let public = PublicKey::from(&secret);
 
@@ -55,14 +68,13 @@ AllowedIPs = 0.0.0.0/0
     )
 }
 
-fn upload_config(session: &Session, config_content: &str) -> anyhow::Result<()> {
-    let remote_path = Path::new("/etc/wireguard/wg0.conf");
+pub fn upload_file(session: &Session, path: &Path, content: &str) -> anyhow::Result<()> {
 
     let mut remote_file = session
-        .scp_send(remote_path, 0o600, config_content.len() as u64, None)
+        .scp_send(path, 0o600, content.len() as u64, None)
         .context("Failed to initiate SCP transfer")?;
 
-    remote_file.write_all(config_content.as_bytes())?;
+    remote_file.write_all(content.as_bytes())?;
 
     remote_file.send_eof()?;
     remote_file.wait_eof()?;
@@ -89,17 +101,54 @@ pub fn setup_wireguard(session: &Session, vps_ip: &IpAddr, interface: &str) -> a
 
     run_remote_cmd(session, "sudo mkdir -p /etc/wireguard")?;
 
-    upload_config(session, &server_config)?;
+    let config_path = Path::new("/etc/wireguard/wg0.conf");
+    upload_file(session, config_path, &server_config)?;
 
     run_remote_cmd(session, "sudo wg-quick up wg0")?;
 
     let client_config = build_client_config(&client_priv, &server_pub, &vps_ip.to_string());
 
-    let filename = format!("wg_{}.conf", vps_ip);
+    let filename = format!("conf/wg_{}.conf", vps_ip);
     std::fs::write(&filename, &client_config)?;
 
     println!("Success! Configuration saved to: {}", filename);
     println!("Import this file into Wireguard Client to connect");
 
     Ok(())
+}
+
+pub fn update_wireguard_config(session: &Session, state: &VpnState) -> anyhow::Result<()> {
+
+    let mut commands: Vec<String> = Vec::new();
+
+    for peer in &state.peers {
+        commands.push(format!("sudo wg set wg0 peer {} allowed-ips {}/32", peer.public_key, peer.ip));
+    }
+
+    commands.push("sudo wg-quick save wg0".to_string());
+
+    let full_cmd = commands.join(" && ");
+
+    run_remote_cmd(session, &full_cmd)?;
+
+    anyhow::Ok(())
+
+}
+
+pub fn get_server_public_key(session: &Session) -> anyhow::Result<String> {
+
+    let (pub_key, status) = run_remote_cmd(session, "sudo wg show wg0 public-key")?;
+
+    if status != 0 {
+        return Err(ServerError::CommandFailed { status, message: pub_key }.into());
+    }
+
+    let trimmed_key = pub_key.trim();
+
+    if trimmed_key.is_empty() {
+        return Err(ServerError::KeyNotFound.into());
+    }
+
+    anyhow::Ok(pub_key.to_string())
+
 }
