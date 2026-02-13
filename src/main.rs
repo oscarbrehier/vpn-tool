@@ -1,13 +1,13 @@
 use clap::Parser;
-use std::{net::IpAddr, path::PathBuf};
+use std::{net::{Ipv4Addr}, path::PathBuf};
 use vpn_tool::{
-    connect_ssh, ping_server, ssh::{harden_ssh, run_remote_cmd}, validate_key_file, wireguard::{self}
+    connect_ssh, ping_server, ssh::{harden_ssh, run_remote_cmd}, validate_key_file, wireguard::{self, peer::add_new_peer, server::{build_client_config, get_server_public_key}, state::VpnState}
 };
 
 #[derive(Parser)]
 struct Args {
     #[arg(short, long)]
-    ip: IpAddr,
+    ip: Ipv4Addr,
     #[arg(short, long)]
     key_path: PathBuf,
     #[arg(short, long, default_value = "dev")]
@@ -22,7 +22,7 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    if !ping_server(&args.ip).await {
+    if !ping_server(args.ip).await {
         anyhow::bail!("Could not reach server at {}. Is Port 22 open?", args.ip);
     }
     println!("Server is reachable");
@@ -42,8 +42,13 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    wireguard::server::setup_wireguard(&session, &args.ip, &args.interface)?;
-    harden_ssh(&session)?;
+    // let new_peer_config = add_new_peer(&session, args.ip, "test".into())?;
+
+    // println!("added new peer with config");
+    // println!("{}", new_peer_config);
+
+    wireguard::server::setup_wireguard(&session, args.ip, &args.interface)?;
+    // harden_ssh(&session)?;
 
     println!("Setup complete");
 
@@ -52,14 +57,16 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use vpn_tool::KeyFileError;
+
     use super::*;
     use std::io::Write;
     use std::net::Ipv4Addr;
 
     #[tokio::test]
     async fn test_ping_timeout() {
-        let ip = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1));
-        let result = ping_server(&ip).await;
+        let ip = Ipv4Addr::new(192, 0, 2, 1);
+        let result = ping_server(ip).await;
         assert_eq!(result, false, "Should return false");
     }
 

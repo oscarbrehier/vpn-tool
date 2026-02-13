@@ -3,7 +3,7 @@ use anyhow::Context;
 use base64::{Engine, engine::general_purpose};
 use rand_core::OsRng;
 use ssh2::Session;
-use std::{fmt::format, io::Write, net::IpAddr, path::Path};
+use std::{fmt::format, io::Write, net::{IpAddr, Ipv4Addr}, path::Path};
 use x25519_dalek::{PublicKey, StaticSecret};
 
 #[derive(Debug, thiserror::Error)]
@@ -53,7 +53,7 @@ AllowedIPs = 10.0.0.2/32
     )
 }
 
-fn build_client_config(client_priv: &str, server_pub: &str, vps_ip: &str) -> String {
+pub fn build_client_config(client_priv: &str, server_pub: &str, vps_ip: Ipv4Addr) -> String {
     format!(
         r#"[Interface]
 PrivateKey = {client_priv}
@@ -84,7 +84,7 @@ pub fn upload_file(session: &Session, path: &Path, content: &str) -> anyhow::Res
     Ok(())
 }
 
-pub fn setup_wireguard(session: &Session, vps_ip: &IpAddr, interface: &str) -> anyhow::Result<()> {
+pub fn setup_wireguard(session: &Session, vps_ip: Ipv4Addr, interface: &str) -> anyhow::Result<()> {
     let (_, status) = run_remote_cmd(session, "which wg")?;
 
     if status != 0 {
@@ -106,7 +106,7 @@ pub fn setup_wireguard(session: &Session, vps_ip: &IpAddr, interface: &str) -> a
 
     run_remote_cmd(session, "sudo wg-quick up wg0")?;
 
-    let client_config = build_client_config(&client_priv, &server_pub, &vps_ip.to_string());
+    let client_config = build_client_config(&client_priv, &server_pub, vps_ip);
 
     let filename = format!("conf/wg_{}.conf", vps_ip);
     std::fs::write(&filename, &client_config)?;

@@ -2,7 +2,7 @@ pub mod ssh;
 pub mod wireguard;
 
 use ssh2::Session;
-use std::{net::IpAddr, path::PathBuf, time::Duration};
+use std::{net::{IpAddr, Ipv4Addr}, path::PathBuf, time::Duration};
 use tokio::{net::TcpStream, time::timeout};
 
 #[derive(Debug, thiserror::Error)]
@@ -31,8 +31,8 @@ pub enum SshError {
     ThreadError(#[from] tokio::task::JoinError),
 }
 
-pub async fn ping_server(addr: &IpAddr) -> bool {
-    match timeout(Duration::from_secs(3), TcpStream::connect((*addr, 22))).await {
+pub async fn ping_server(addr: Ipv4Addr) -> bool {
+    match timeout(Duration::from_secs(3), TcpStream::connect((addr, 22))).await {
         Ok(Ok(_stream)) => true,
         _ => false,
     }
@@ -54,10 +54,10 @@ pub fn validate_key_file(path: &PathBuf) -> Result<(), KeyFileError> {
     Ok(())
 }
 
-pub async fn connect_ssh(addr: IpAddr, user: String, key_path: PathBuf) -> Result<Session, SshError> {
+pub async fn connect_ssh(addr: Ipv4Addr, user: String, key_path: PathBuf) -> Result<Session, SshError> {
     tokio::task::spawn_blocking(move || {
         let stream =
-            std::net::TcpStream::connect((addr, 22)).map_err(|e| SshError::Network(addr, e))?;
+            std::net::TcpStream::connect((addr, 22)).map_err(|e| SshError::Network(IpAddr::V4(addr), e))?;
 
         let mut sess = Session::new()?;
         sess.set_tcp_stream(stream);

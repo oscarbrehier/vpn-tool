@@ -14,6 +14,10 @@ pub fn run_remote_cmd(session: &Session, cmd: &str) -> anyhow::Result<(String, i
 
     let mut output = String::new();
     channel.read_to_string(&mut output)?;
+
+    channel.send_eof()?;
+    channel.wait_eof()?;
+
     channel.wait_close()?;
 
     let exit_status = channel.exit_status()?;

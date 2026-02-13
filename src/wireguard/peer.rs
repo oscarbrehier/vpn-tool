@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use ssh2::Session;
-use std::fmt::{self, write};
-use std::net::{IpAddr, Ipv4Addr};
+use std::fmt::{self};
+use std::net::{Ipv4Addr};
 
-use crate::wireguard::server::update_wireguard_config;
+use crate::wireguard::server::{build_client_config, update_wireguard_config};
 use crate::wireguard::{
     server::generate_keys,
     state::{get_or_create_state, save_state},
@@ -43,8 +43,8 @@ impl fmt::Display for Peer {
     }
 }
 
-pub fn add_new_peer(session: &Session, name: String) -> anyhow::Result<()> {
-    let mut state = get_or_create_state(session)?;
+pub fn add_new_peer(session: &Session, server_ip: Ipv4Addr, name: String) -> anyhow::Result<String> {
+    let mut state = get_or_create_state(session, server_ip)?;
 
     let next_ip = state.get_next_available_ip()?;
     let (new_peer, priv_key) = Peer::new(name, next_ip);
@@ -52,9 +52,16 @@ pub fn add_new_peer(session: &Session, name: String) -> anyhow::Result<()> {
     state.peers.push(new_peer);
     state.last_updated = Utc::now();
 
+	println!("saving state");
     save_state(session, &state)?;
-	update_wireguard_config(session, &state)?;
+	println!("state saved");
 
-	anyhow::Ok(())
+	println!("updating wireguard config");
+	update_wireguard_config(session, &state)?;
+	println!("wireguard config updated");
+
+	let client_config = build_client_config(&priv_key, &state.server_public_key, state.server_ip);
+
+	anyhow::Ok(client_config)
 
 }
