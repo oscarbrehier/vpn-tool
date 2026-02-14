@@ -1,22 +1,21 @@
-use crate::{ssh::run_remote_cmd, wireguard::state::VpnState};
+use crate::{ssh::run_remote_cmd, wireguard::{peer::Peer, state::{VpnState, save_state}}};
 use anyhow::Context;
 use base64::{Engine, engine::general_purpose};
 use rand_core::OsRng;
 use ssh2::Session;
-use std::{fmt::format, io::Write, net::{IpAddr, Ipv4Addr}, path::Path};
+use std::{
+    fmt::format, fs::create_dir_all, io::Write, net::{IpAddr, Ipv4Addr}, path::Path
+};
 use x25519_dalek::{PublicKey, StaticSecret};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
     #[error("Remote command failed with exit code {status}: {message}")]
-    CommandFailed {
-        status: i32,
-        message: String
-    },
+    CommandFailed { status: i32, message: String },
     #[error("Server public key not found or empty")]
     KeyNotFound,
     #[error("Internal state error: {0}")]
-    State(#[from] crate::wireguard::state::StateError)
+    State(#[from] crate::wireguard::state::StateError),
 }
 
 pub fn generate_keys() -> (String, String) {
@@ -69,7 +68,6 @@ AllowedIPs = 0.0.0.0/0
 }
 
 pub fn upload_file(session: &Session, path: &Path, content: &str) -> anyhow::Result<()> {
-
     let mut remote_file = session
         .scp_send(path, 0o600, content.len() as u64, None)
         .context("Failed to initiate SCP transfer")?;
@@ -95,20 +93,27 @@ pub fn setup_wireguard(session: &Session, vps_ip: Ipv4Addr, interface: &str) -> 
         }
     }
     let (server_priv, server_pub) = generate_keys();
-    let (client_priv, client_pub) = generate_keys();
+    let (new_peer, peer_priv_key) = Peer::new("initial-client".into(), Ipv4Addr::new(10, 0, 0, 2));
 
-    let server_config = build_server_config(&server_priv, &client_pub, interface);
+    let mut state = VpnState::new(server_pub.clone(), vps_ip);
+    state.peers.push(new_peer.clone());
 
-    run_remote_cmd(session, "sudo mkdir -p /etc/wireguard")?;
+    let server_config = build_server_config(&server_priv, &new_peer.public_key, interface);
+
+    run_remote_cmd(session, "sudo mkdir -p /etc/wireguard && sudo chmod 700 /etc/wireguard")?;
 
     let config_path = Path::new("/etc/wireguard/wg0.conf");
     upload_file(session, config_path, &server_config)?;
 
+    run_remote_cmd(session, "sudo wg-quick down wg0 || true")?;
     run_remote_cmd(session, "sudo wg-quick up wg0")?;
 
-    let client_config = build_client_config(&client_priv, &server_pub, vps_ip);
+    save_state(session, &state)?;
+
+    let client_config = build_client_config(&peer_priv_key, &server_pub, vps_ip);
 
     let filename = format!("conf/wg_{}.conf", vps_ip);
+    std::fs::create_dir_all("conf")?;
     std::fs::write(&filename, &client_config)?;
 
     println!("Success! Configuration saved to: {}", filename);
@@ -118,11 +123,22 @@ pub fn setup_wireguard(session: &Session, vps_ip: Ipv4Addr, interface: &str) -> 
 }
 
 pub fn update_wireguard_config(session: &Session, state: &VpnState) -> anyhow::Result<()> {
-
     let mut commands: Vec<String> = Vec::new();
 
+    let (current_peers_raw, _) = run_remote_cmd(session, "sudo wg show wg0 peers")?;
+    let active_keys: Vec<&str> = current_peers_raw.lines().collect();
+
+    for key in active_keys {
+        if !state.peers.iter().any(|p| p.public_key == key) {
+            commands.push(format!("sudo wg set wg0 peer {} remove", key));
+        }
+    }
+
     for peer in &state.peers {
-        commands.push(format!("sudo wg set wg0 peer {} allowed-ips {}/32", peer.public_key, peer.ip));
+        commands.push(format!(
+            "sudo wg set wg0 peer {} allowed-ips {}/32",
+            peer.public_key, peer.ip
+        ));
     }
 
     commands.push("sudo wg-quick save wg0".to_string());
@@ -132,15 +148,17 @@ pub fn update_wireguard_config(session: &Session, state: &VpnState) -> anyhow::R
     run_remote_cmd(session, &full_cmd)?;
 
     anyhow::Ok(())
-
 }
 
 pub fn get_server_public_key(session: &Session) -> anyhow::Result<String> {
-
     let (pub_key, status) = run_remote_cmd(session, "sudo wg show wg0 public-key")?;
 
     if status != 0 {
-        return Err(ServerError::CommandFailed { status, message: pub_key }.into());
+        return Err(ServerError::CommandFailed {
+            status,
+            message: pub_key,
+        }
+        .into());
     }
 
     let trimmed_key = pub_key.trim();
@@ -150,5 +168,4 @@ pub fn get_server_public_key(session: &Session) -> anyhow::Result<String> {
     }
 
     anyhow::Ok(pub_key.to_string())
-
 }

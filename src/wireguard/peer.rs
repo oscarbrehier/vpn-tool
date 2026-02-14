@@ -52,13 +52,8 @@ pub fn add_new_peer(session: &Session, server_ip: Ipv4Addr, name: String) -> any
     state.peers.push(new_peer);
     state.last_updated = Utc::now();
 
-	println!("saving state");
     save_state(session, &state)?;
-	println!("state saved");
-
-	println!("updating wireguard config");
 	update_wireguard_config(session, &state)?;
-	println!("wireguard config updated");
 
 	let client_config = build_client_config(&priv_key, &state.server_public_key, state.server_ip);
 

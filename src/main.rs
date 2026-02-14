@@ -42,12 +42,12 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // let new_peer_config = add_new_peer(&session, args.ip, "test".into())?;
+    let new_peer_config = add_new_peer(&session, args.ip, "test".into())?;
 
-    // println!("added new peer with config");
-    // println!("{}", new_peer_config);
+    println!("added new peer with config");
+    println!("{}", new_peer_config);
 
-    wireguard::server::setup_wireguard(&session, args.ip, &args.interface)?;
+    // wireguard::server::setup_wireguard(&session, args.ip, &args.interface)?;
     // harden_ssh(&session)?;
 
     println!("Setup complete");
