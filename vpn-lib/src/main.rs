@@ -1,6 +1,6 @@
 use clap::Parser;
 use std::{net::{Ipv4Addr}, path::PathBuf};
-use vpn_tool::{
+use vpn_lib::{
     connect_ssh, ping_server, ssh::{harden_ssh, run_remote_cmd}, validate_key_file, wireguard::{self, peer::add_new_peer, server::{build_client_config, get_server_public_key}, state::VpnState}
 };
 
@@ -42,13 +42,13 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let new_peer_config = add_new_peer(&session, args.ip, "test".into())?;
+    // let new_peer_config = add_new_peer(&session, args.ip, "test".into())?;
 
-    println!("added new peer with config");
-    println!("{}", new_peer_config);
+    // println!("added new peer with config");
+    // println!("{}", new_peer_config);
 
-    // wireguard::server::setup_wireguard(&session, args.ip, &args.interface)?;
-    // harden_ssh(&session)?;
+    wireguard::server::setup_wireguard(&session, args.ip, &args.interface)?;
+    harden_ssh(&session)?;
 
     println!("Setup complete");
 
@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use vpn_tool::KeyFileError;
+    use vpn_lib::KeyFileError;
 
     use super::*;
     use std::io::Write;
