@@ -1,0 +1,6 @@
+[workspace]
+members = [
+	"vpn-lib",
+	"gui/src-tauri"
+]
+resolver = "2"
