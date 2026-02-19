@@ -1,10 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use ssh2::Session;
-use std::{io::Read, net::Ipv4Addr};
+use std::{net::Ipv4Addr};
 
 use crate::{
-    ssh::run_remote_cmd,
+    ssh::{SshSession, run_remote_cmd},
     wireguard::{peer::Peer, server},
 };
 
@@ -64,24 +63,23 @@ impl VpnState {
     }
 }
 
-pub fn get_or_create_state(session: &Session, server_ip: Ipv4Addr) -> anyhow::Result<VpnState> {
+pub async fn get_or_create_state(
+    session: &SshSession,
+    server_ip: Ipv4Addr,
+) -> anyhow::Result<VpnState> {
     let cmd = "cat /etc/wireguard/peers.json";
 
-    let mut channel = session.channel_session()?;
-    channel.exec(cmd)?;
+    let (output, status) = run_remote_cmd(session, &cmd).await?;
 
-    let mut contents = String::new();
-    channel.read_to_string(&mut contents)?;
-
-    if contents.is_empty() {
-        let server_pub = server::get_server_public_key(session)?;
-        anyhow::Ok(VpnState::new(server_pub, server_ip))
+    if status != 0 || output.trim().is_empty() {
+        let server_pub = server::get_server_public_key(session).await?;
+        Ok(VpnState::new(server_pub, server_ip))
     } else {
-        anyhow::Ok(serde_json::from_str(&contents)?)
+        Ok(serde_json::from_str(&output)?)
     }
 }
 
-pub fn save_state(session: &Session, state: &VpnState) -> anyhow::Result<()> {
+pub async fn save_state(session: &SshSession, state: &VpnState) -> anyhow::Result<()> {
     let json = serde_json::to_string_pretty(state)?;
     let escaped_json = json.replace("'", "'\\''");
 
@@ -90,7 +88,7 @@ pub fn save_state(session: &Session, state: &VpnState) -> anyhow::Result<()> {
         escaped_json
     );
 
-    let (output, status) = run_remote_cmd(session, &cmd)?;
+    let (output, status) = run_remote_cmd(session, &cmd).await?;
 
     if status != 0 {
         return Err(anyhow::anyhow!(

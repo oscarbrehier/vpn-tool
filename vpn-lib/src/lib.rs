@@ -1,8 +1,11 @@
 pub mod ssh;
 pub mod wireguard;
 
-use ssh2::Session;
-use std::{net::{IpAddr, Ipv4Addr}, path::PathBuf, time::Duration};
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    path::PathBuf,
+    time::Duration,
+};
 use tokio::{net::TcpStream, time::timeout};
 
 #[derive(Debug, thiserror::Error)]
@@ -29,6 +32,8 @@ pub enum SshError {
     AuthFailed(String),
     #[error("The background task panicked")]
     ThreadError(#[from] tokio::task::JoinError),
+    #[error("Handshake failed: {0}")]
+    HandshakeFailed(String),
 }
 
 pub async fn ping_server(addr: Ipv4Addr) -> bool {
@@ -52,24 +57,4 @@ pub fn validate_key_file(path: &PathBuf) -> Result<(), KeyFileError> {
     std::fs::read(path).map_err(|e| KeyFileError::NoReadPermissions(e.to_string()))?;
 
     Ok(())
-}
-
-pub async fn connect_ssh(addr: Ipv4Addr, user: String, key_path: PathBuf) -> Result<Session, SshError> {
-    tokio::task::spawn_blocking(move || {
-        let stream =
-            std::net::TcpStream::connect((addr, 22)).map_err(|e| SshError::Network(IpAddr::V4(addr), e))?;
-
-        let mut sess = Session::new()?;
-        sess.set_tcp_stream(stream);
-        sess.handshake()?;
-
-        sess.userauth_pubkey_file(&user, None, &key_path, None)?;
-
-        if !sess.authenticated() {
-            return Err(SshError::AuthFailed(user));
-        }
-
-        Ok(sess)
-    })
-    .await?
 }
