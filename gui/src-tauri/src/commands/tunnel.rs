@@ -9,11 +9,10 @@ use vpn_lib::{
     self,
     ssh::{connect_ssh, harden_ssh},
     validate_key_file,
-    wireguard::{
-        client::{list_local_configs, start_tunnel},
-        server::setup_wireguard,
-    },
+    wireguard::{client::list_local_configs, server::setup_wireguard},
 };
+
+use crate::TunnelState;
 
 #[tauri::command]
 pub async fn setup_server(server_ip: String, user: String, key_file: String) -> Result<(), String> {
@@ -79,7 +78,37 @@ pub async fn get_configs() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub async fn start_vpn_tunnel(app: AppHandle, conf_name: String) -> Result<(), String> {
+pub fn is_tunnel_active(name: String) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        let service_name = format!("WireGuardTunnel${}", name);
+        let output = std::process::Command::new("sc")
+            .args(["query", &service_name])
+            .output();
+
+        match output {
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                stdout.contains("RUNNING")
+            }
+            Err(_) => false,
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let output = std::process::Command::new("wg")
+            .args(["show", &name])
+            .output();
+        output.map(|o| o.status.success()).unwrap_or(false)
+    }
+}
+
+#[tauri::command]
+pub async fn start_tunnel(
+    app: AppHandle,
+    state: tauri::State<'_, TunnelState>,
+    conf_name: String,
+) -> Result<(), String> {
     let mut conf_path = app
         .path()
         .resource_dir()
@@ -102,5 +131,26 @@ pub async fn start_vpn_tunnel(app: AppHandle, conf_name: String) -> Result<(), S
         return Err(format!("Configuration file not found at {:?}", conf_path));
     }
 
-    start_tunnel(&conf_path).map_err(|e| e.to_string())
+    vpn_lib::wireguard::client::start_tunnel(&conf_path).map_err(|e| e.to_string())?;
+
+    let tunnel_name = conf_name.replace(".conf", "");
+    let mut active_lock = state.active_tunnel.lock().unwrap();
+    *active_lock = Some(tunnel_name);
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_tunnel(app: AppHandle) -> Result<(), String> {
+    let tunnel_name = {
+        let state = app.state::<TunnelState>();
+        let active_lock = state.active_tunnel.lock().unwrap();
+        active_lock.clone()
+    };
+
+    let Some(name) = tunnel_name else {
+        return Err("No active tunnel found in state".to_string());
+    };
+
+    Ok(())
 }

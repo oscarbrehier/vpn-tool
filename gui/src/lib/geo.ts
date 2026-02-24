@@ -11,7 +11,7 @@ export interface GeoLocation {
 	query: string;
 };
 
-export async function getGeoLocation(ip_address?: string): Promise<any | null> {
+export async function getGeoLocation(ip_address?: string): Promise<GeoLocation | null> {
 
 	try {
 

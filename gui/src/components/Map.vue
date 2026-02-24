@@ -2,8 +2,9 @@
 import { ref, reactive, onMounted, watch, nextTick } from 'vue';
 import { getConfigurations, VpnConfig } from '../lib/vpn';
 import { invoke } from '@tauri-apps/api/core';
+import { getGeoLocation } from '../lib/geo';
 
-const props = defineProps(['lat', 'lon', 'country']);
+const props = defineProps(['tunnel', 'isConnected']);
 
 const svgContent = ref('');
 const dotPos = reactive({ x: 0, y: 0 });
@@ -138,7 +139,7 @@ async function placePointsOnMap() {
 
 	const mapMarkers = configs.map((conf) => {
 
-		if (!conf.location) return ;
+		if (!conf.location) return;
 
 		const coords = getCountryCenter(conf.location.country);
 
@@ -213,8 +214,14 @@ onMounted(async () => {
 
 		svgContent.value = text.replace(/<svg[^>]*>|<\/svg>/g, '');
 
-		if (props.country) {
-			flyToCountry(props.country);
+		if (props.isConnected && props.tunnel) {
+
+			const res = await getGeoLocation(props.tunnel);
+			if (res && res.status == "success") {
+
+				flyToCountry(res.country);
+			}
+
 		};
 
 		await placePointsOnMap();
@@ -225,14 +232,21 @@ onMounted(async () => {
 
 });
 
-watch(() => props.country, (newCountry) => {
+watch(() => props.isConnected, async (connected) => {
 
-	if (newCountry && svgContent.value) {
-		console.log(newCountry);
-		flyToCountry(newCountry);
+	if (connected && props.tunnel && svgContent.value) {
+		
+		await nextTick();
+
+		const res = await getGeoLocation(props.tunnel);
+
+		if (res && res.status === "success") {
+			flyToCountry(res.country);
+		};
+		
 	};
 
-});
+}, { immediate: true });
 
 async function startTunnel(conf: VpnConfig) {
 
@@ -240,36 +254,36 @@ async function startTunnel(conf: VpnConfig) {
 
 		console.log(conf)
 
-		await invoke("start_vpn_tunnel", {
+		await invoke("start_tunnel", {
 			confName: conf.file_path
 		});
 
 	} catch (err) {
 		console.error(err);
-	}	
+	}
 
 };
-
 </script>
 
 <template>
 	<div ref="mapContainer"
 		class="absolute inset-0 w-full h-full overflow-hidden bg-[#1a1b26] cursor-grab active:cursor-grabbing"
 		@mousedown="startPan" @mousemove="doPan" @mouseup="stopPan" @mouseleave="stopPan" @wheel.prevent="handleWheel">
-
 		<svg viewBox="0 0 2000 857" class="w-full h-full">
 			<g :style="{
 				transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
 				transformOrigin: '0 0',
-				transition: isDragging ? 'none' : 'transform 1.5s cubic-bezier(0.19, 1, 0.22, 1)'
+				transition: isDragging
+					? 'none'
+					: 'transform 1.5s cubic-bezier(0.19, 1, 0.22, 1)',
 			}">
 				<g v-html="svgContent" class="fill-[#2b2c36] stroke-[#676a82]/20"></g>
 
 				<circle v-if="dotPos.x !== 0" :cx="dotPos.x" :cy="dotPos.y" r="4" fill="#10b981"
 					class="drop-shadow-[0_0_15px_rgba(16,185,129,1)]" />
 
-				<circle v-for="p in allMarkers" :cx="p.x" :cy="p.y" @click="startTunnel(p)" r="3" fill="oklch(70.7% 0.022 261.325)"
-					class="drop-shadow-[oklch(55.1% 0.027 264.364)]" />
+				<circle v-for="p in allMarkers" :cx="p.x" :cy="p.y" @click="startTunnel(p)" r="3"
+					fill="oklch(70.7% 0.022 261.325)" class="drop-shadow-[oklch(55.1% 0.027 264.364)]" />
 			</g>
 		</svg>
 	</div>

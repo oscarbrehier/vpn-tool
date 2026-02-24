@@ -1,22 +1,26 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import "./assets/globals.css";
 import Map from "./components/Map.vue";
 import { Settings as SettingsIcon, X } from "lucide-vue-next";
 import Settings from "./components/Settings.vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getGeoLocation } from "./lib/geo";
+import { listen } from "@tauri-apps/api/event";
+
+interface TunnelPayload {
+	name: string;
+	is_active: boolean;
+}
 
 const isConnected = ref(false);
 const isConnecting = ref(false);
 const isSettingsOpen = ref(false);
+const activeTunnel = ref<string | null>(null);
 
 const locationData = ref({
-	ip: "",
 	city: "",
 	country: "",
-	lat: 0,
-	lon: 0,
 	isp: ""
 });
 
@@ -57,25 +61,45 @@ async function getAvailableEndpoints() {
 
 onMounted(async () => {
 
-	const data = await getGeoLocation();
-	if (data) {
+	try {
 
-		locationData.value = {
-			ip: data.query,
-			...data
-		};
+		const status = await invoke<TunnelPayload>('get_current_tunnel_status');
 
-	};
+		isConnected.value = status.is_active;
+		activeTunnel.value = status.name;
+
+	} catch (err) { }
+
+	await listen("tunnel-status", (event: { payload: TunnelPayload }) => {
+		isConnected.value = event.payload.is_active;
+		activeTunnel.value = event.payload.name;
+	});
 
 	const endpoints = await getAvailableEndpoints();
 	availableEndpoints.value = endpoints;
 
 });
 
+watch(() => isConnected.value, async (connected) => {
+
+	if (connected && activeTunnel.value) {
+
+		const data = await getGeoLocation();
+
+		if (data) {
+
+			locationData.value = {
+				...data
+			};
+
+		};
+
+	};
+
+}, { immediate: true });
+
 const openSettings = () => isSettingsOpen.value = true;
 const closeSettings = () => isSettingsOpen.value = false;
-
-const fileInputRef = ref(null);
 
 </script>
 
@@ -112,7 +136,7 @@ const fileInputRef = ref(null);
 
 				<div>
 					<p class="text-[12px] text-neutral-400">Your IP Address</p>
-					<p class="text-sm">{{ locationData.ip || 'Detecting...' }}</p>
+					<p class="text-sm">{{ activeTunnel || 'Detecting...' }}</p>
 				</div>
 
 				<div class="h-full w-px border border-neutral-500/20 mx-8" />
@@ -162,7 +186,7 @@ const fileInputRef = ref(null);
 
 		</div> -->
 
-		<Map :lat="locationData.lat" :lon="locationData.lon" :country="locationData.country" />
+		<Map :tunnel="activeTunnel" :isConnected="isConnected" />
 
 		<Settings :isOpen="isSettingsOpen" @close="isSettingsOpen = false" />
 
