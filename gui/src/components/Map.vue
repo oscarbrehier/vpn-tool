@@ -75,12 +75,14 @@ function handleWheel(e: WheelEvent) {
 	const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
 	const ratio = Math.max(SVG_W / rect.width, SVG_H / rect.height);
 
-	const zoomSpeed = 0.1;
-	const delta = e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+	const SENSITIVITY = 0.002;
+	const MIN_ZOOM = 3;
+	const MAX_ZOOM = 8;
 
 	const oldScale = transform.scale;
 
-	const newScale = Math.max(1, Math.min(8, oldScale + delta));
+	let newScale = oldScale * (1 - e.deltaY * SENSITIVITY);
+	newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale));
 
 	const mouseX = (e.clientX - rect.left) * ratio;
 	const mouseY = (e.clientY - rect.top) * ratio;
@@ -277,14 +279,15 @@ async function startTunnel(conf: VpnConfig) {
 			}">
 				<g v-html="svgContent" class="fill-[#2b2c36] stroke-[#676a82]/20"></g>
 
-				<circle v-if="dotPos.x !== 0" :cx="dotPos.x" :cy="dotPos.y" r="4" fill="#10b981"
-					class="drop-shadow-[0_0_15px_rgba(16,185,129,1)]" />
-
 				<template v-for="p in allMarkers" :key="p.file_path">
 					<circle v-if="p.name !== props.tunnel" :cx="p.x" :cy="p.y" @click="startTunnel(p)" r="3"
 						fill="oklch(70.7% 0.022 261.325)"
 						class="drop-shadow-[oklch(55.1% 0.027 264.364)] cursor-pointer hover:fill-white transition-colors" />
 				</template>
+
+				<circle v-if="dotPos.x !== 0" :cx="dotPos.x" :cy="dotPos.y" r="4"
+					:fill="isConnected ? 'oklch(76.5% 0.177 163.223)' : 'oklch(50.5% 0.213 27.518)'"
+					:class="isConnected ? 'drop-shadow-[0_0_15px_rgba(16,185,129,1)]' : 'drop-shadow-[oklch(63.7% 0.237 25.331)]'" />
 			</g>
 		</svg>
 	</div>

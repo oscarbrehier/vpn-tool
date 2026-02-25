@@ -73,7 +73,6 @@ onMounted(async () => {
 	} catch (err) { }
 
 	await listen("tunnel-status", (event: { payload: TunnelPayload }) => {
-		console.log(event.payload)
 		isConnected.value = event.payload.is_active;
 		activeTunnel.value = event.payload.name;
 	});
@@ -164,35 +163,6 @@ const closeSettings = () => isSettingsOpen.value = false;
 			</div>
 
 		</div>
-
-		<!-- connection toggle -->
-		<!-- <button
-			@click="handleToggle"
-			class="bg-violet-700 z-20 absolute left-1/2 -translate-x-1/2 -translate-y-1/2"
-		>
-			
-		</button> -->
-
-		<!-- connection info -->
-		<!-- <div
-			class="absolute h-20 w-full bottom-0 right-0 z-30 pointer-events-none flex items-center justify-between px-4">
-
-			<div>
-				<p class="text-sm text-neutral-400">Your IP Address</p>
-				<p>{{ locationData.ip || 'Detecting...' }}</p>
-			</div>
-
-			<div>
-				<p class="text-sm text-neutral-400">Country</p>
-				<p>{{ locationData.country || 'Detecting...' }}</p>
-			</div>
-
-			<div>
-				<p class="text-sm text-neutral-400">Provider</p>
-				<p>{{ locationData.isp || 'Detecting...' }}</p>
-			</div>
-
-		</div> -->
 
 		<Map :tunnel="mapFocusIp" :isConnected="isConnected" />
 
