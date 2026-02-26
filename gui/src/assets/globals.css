@@ -17,6 +17,30 @@
 	--radius-lg: var(--radius);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-sm: calc(var(--radius) - 4px);
+
+	--color-brand-50: var(--primary-50);
+	--color-brand-100: var(--primary-100);
+	--color-brand-200: var(--primary-200);
+	--color-brand-300: var(--primary-300);
+	--color-brand-400: var(--primary-400);
+	--color-brand-500: var(--primary-500);
+	--color-brand-600: var(--primary-600);
+	--color-brand-700: var(--primary-700);
+	--color-brand-800: var(--primary-800);
+	--color-brand-900: var(--primary-900);
+	--color-brand-950: var(--primary-950);
+
+	--color-accent-50: var(--accent-50);
+	--color-accent-100: var(--accent-100);
+	--color-accent-200: var(--accent-200);
+	--color-accent-300: var(--accent-300);
+	--color-accent-400: var(--accent-400);
+	--color-accent-500: var(--accent-500);
+	--color-accent-600: var(--accent-600);
+	--color-accent-700: var(--accent-700);
+	--color-accent-800: var(--accent-800);
+	--color-accent-900: var(--accent-900);
+	--color-accent-950: var(--accent-950);
 }
 
 @layer base {
@@ -90,6 +114,30 @@
 		--sidebar-accent-foreground: 210 20% 95%;
 		--sidebar-border: 220 15% 20%;
 		--sidebar-ring: 155 60% 50%;
+
+		--primary-50: #190015;
+		--primary-100: #320129;
+		--primary-200: #640252;
+		--primary-300: #97027b;
+		--primary-400: #c903a5;
+		--primary-500: #fb04ce;
+		--primary-600: #fc36d8;
+		--primary-700: #fd68e1;
+		--primary-800: #fd9beb;
+		--primary-900: #fecdf5;
+		--primary-950: #ffe6fa;
+
+		--accent-50: #151900;
+		--accent-100: #293201;
+		--accent-200: #526402;
+		--accent-300: #7b9702;
+		--accent-400: #a5c903;
+		--accent-500: #cefb04;
+		--accent-600: #d8fc36;
+		--accent-700: #e1fd68;
+		--accent-800: #ebfd9b;
+		--accent-900: #f5fecd;
+		--accent-950: #faffe6;
 	}
 }
 
@@ -112,7 +160,7 @@
 .uiverse {
 	--duration: 7s;
 	--easing: linear;
-	
+
 	/* --c-color-1: rgba(255, 163, 26, 0.7);
 	--c-color-2: #1a23ff;
 	--c-color-3: #e21bda;

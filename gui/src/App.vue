@@ -129,81 +129,31 @@ const closeSettings = () => isSettingsOpen.value = false;
 		class: 'backdrop-blur-xl !bg-[#19272a]/60 border-t border-white/20 border-x border-b border-white/5'
 	}" :closeButton="true" closeButtonPosition="top-right" position="top-left" theme="dark" richColors />
 
-	<main class="h-screen w-screen bg-[#19272a] bg-cover bg-center">
+	<main class="h-screen w-scree bg-cover bg-center">
 
 		<Map :tunnel="mapFocusIp" :isConnected="isConnected" />
 
+
 		<!-- gradient -->
 		<div class="absolute h-full w-full bg-linear-to-b via-transparent to-black/10 z-20 pointer-events-none transition-colors duration-1000"
-			:class="isConnected ? 'from-emerald-500/30' : 'from-[#ff006e]/30'" />
+			:class="isConnected ? 'from-accent-500/30' : 'from-brand-500/30'" />
 
 		<Toolbar :isOpen="isSettingsOpen" v-on:open="openSettings" v-on:close="closeSettings" />
 
 		<div class="absolute z-50 bottom-0 left-0 w-full p-4 flex flex-col items-center">
 
-			<!-- <button @click="handleToggle" class="py-4 rounded-full px-14 mb-8 font-medium select-none shadow-2xl flex items-center space-x-4"
-				:class="isConnected ? 'bg-neutral-700' : 'bg-linear-to-br from-pink-500 via-purple-500 to-blue-600'">
-				<span>{{ isConnected ? "Disconnect" : "Connect" }}</span>
+			<!-- <button class="capitalize px-8 py-2 rounded-full bg-slate-700">
+				{{ isConnected ? "connect" : "disconnect" }}
 			</button> -->
 
-			<!-- <button @click="handleToggle" style="box-shadow: -5px 5px 0px 0px oklch(58.5% 0.233 277.117)"
-				class="mb-8 text-base px-8 py-3 bg-black border-[3px] border-indigo-700 rounded-2xl text-white font-black transition-transform duration-[400ms] ease-[cubic-bezier(0.68,-0.55,0.265,1.55)]">
-				{{ isConnected ? "Disconnect" : "Connect" }}
-			</button> -->
-
-			<div class="mb-8">
-				<button @click="handleToggle" :class="['uiverse', { connected: isConnected }]">
-					<div class="wrapper">
-						<span>{{ isConnected ? "Disconnect" : "Connect" }}</span>
-						<div class="circle circle-12"></div>
-						<div class="circle circle-11"></div>
-						<div class="circle circle-10"></div>
-						<div class="circle circle-9"></div>
-						<div class="circle circle-8"></div>
-						<div class="circle circle-7"></div>
-						<div class="circle circle-6"></div>
-						<div class="circle circle-5"></div>
-						<div class="circle circle-4"></div>
-						<div class="circle circle-3"></div>
-						<div class="circle circle-2"></div>
-						<div class="circle circle-1"></div>
-					</div>
+			<div class="inline-block p-[2px] rounded-full bg-linear-to-r from-brand-400 via-zinc-700 to-zinc-600">
+				<button class="px-6 py-4 bg-background rounded-full uppercase font-semibold text-zinc-300">
+					{{ isConnected ? "disconnect" : "connect" }}
 				</button>
-
-			</div>
-
-			<!-- <div v-if="isConnected" class="h-auto lg:w-1/2 w-full py-2">
-				<div>
-					<p class="text-[12px] text-neutral-400">Latency</p>
-					<p class="text-sm">{{ networkData.latency ? `${networkData.latency}ms` : 'Detecting...' }}</p>
-				</div>
-			</div> -->
-
-			<div class="h-auto lg:w-1/2 w-full z-50 md:px-0 px-4 py-2 flex justify-between select-none">
-				<!-- <div class="h-auto bg-neutral-900 w-full z-50 rounded-md border border-neutral-500/20 px-4 py-2 flex justify-between"> -->
-
-				<div>
-					<p class="text-[12px] text-neutral-400">Your IP Address</p>
-					<p class="text-sm">{{ mapFocusIp || 'Detecting...' }}</p>
-				</div>
-
-				<div class="h-full w-px border border-neutral-500/20 mx-8" />
-
-				<div>
-					<p class="text-[12px] text-neutral-400">Country</p>
-					<p class="text-sm">{{ locationData.country || 'Detecting...' }}</p>
-				</div>
-
-				<div class="h-full w-px border border-neutral-500/20 mx-8" />
-
-				<div>
-					<p class="text-[12px] text-neutral-400">Provider</p>
-					<p class="text-sm">{{ locationData.as_name || 'Detecting...' }}</p>
-				</div>
-
 			</div>
 
 		</div>
+
 
 		<Settings :isOpen="isSettingsOpen" @close="isSettingsOpen = false" />
 

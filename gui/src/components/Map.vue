@@ -267,9 +267,16 @@ async function startTunnel(conf: VpnConfig) {
 
 <template>
 	<div ref="mapContainer"
-		class="absolute inset-0 w-full h-full overflow-hidden bg-[#1a1b26] cursor-grab active:cursor-grabbing"
+		class="absolute inset-0 w-full h-full overflow-hidden bg-backgroun cursor-grab active:cursor-grabbing"
 		@mousedown="startPan" @mousemove="doPan" @mouseup="stopPan" @mouseleave="stopPan" @wheel.prevent="handleWheel">
-		<svg viewBox="0 0 2000 857" class="w-full h-full">
+
+		<div class="absolute -z-10 inset-0 h-full w-full 
+			bg-[linear-gradient(to_right,#73737320_1px,transparent_1px),linear-gradient(to_bottom,#73737320_1px,transparent_1px)] 
+			bg-size-[16px_16px]
+			mask-[radial-gradient(ellipse_50%_50%_at_50%_50%,#000_80%,transparent_100%)]" />
+
+
+		<svg viewBox="0 0 2000 857" class="w-full h-full relative z-10">
 
 			<defs>
 				<radialGradient id="dot-on" cx="50%" cy="30%">
@@ -301,7 +308,7 @@ async function startTunnel(conf: VpnConfig) {
 				</template>
 
 				<circle :cx="dotPos.x" :cy="dotPos.y" r="3" :fill="isConnected ? 'url(#dot-on)' : 'url(#dot-off)'" />
-				
+
 				<circle v-if="dotPos.x !== 0" :cx="dotPos.x" :cy="dotPos.y" r="4"
 					:fill="isConnected ? 'url(#dot-on)' : 'url(#dot-off)'"
 					:class="isConnected ? 'drop-shadow-[0_0_15px_rgba(16,185,129,1)]' : 'drop-shadow-[0_0_15px_oklch(63.7% 0.237 25.331)]'" />
