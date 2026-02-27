@@ -280,12 +280,12 @@ async function startTunnel(conf: VpnConfig) {
 
 			<defs>
 				<radialGradient id="dot-on" cx="50%" cy="30%">
-					<stop offset="0%" stop-color="#72ffe8" />
-					<stop offset="100%" stop-color="#00d4aa" />
+					<stop offset="0%" stop-color="#cefb04" />
+					<stop offset="100%" stop-color="#a5c903" />
 				</radialGradient>
 				<radialGradient id="dot-off" cx="60%" cy="30%">
-					<stop offset="0%" stop-color="#ff72c0" />
-					<stop offset="100%" stop-color="#ff006e" />
+					<stop offset="0%" stop-color="#fb04ce" />
+					<stop offset="100%" stop-color="#c903a5" />
 				</radialGradient>
 				<radialGradient id="dot" cx="60%" cy="30%">
 					<stop offset="0%" stop-color="oklch(70.7% 0.022 261.325)" />
