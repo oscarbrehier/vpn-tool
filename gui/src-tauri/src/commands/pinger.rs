@@ -1,8 +1,4 @@
-use std::{
-    net::{Ipv4Addr},
-    str::FromStr,
-    sync::Mutex,
-};
+use std::{net::Ipv4Addr, str::FromStr, sync::Mutex};
 use tauri::{AppHandle, Emitter, State};
 use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;

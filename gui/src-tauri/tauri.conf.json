@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "visible": false,
         "title": "vpn",
         "width": 1160,
         "height": 600,

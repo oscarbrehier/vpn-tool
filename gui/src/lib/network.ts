@@ -1,9 +1,7 @@
 import { runCommand } from "./tauri";
 
 export async function startPinging() {
-	console.log("start pinging")
-	const { error } = await runCommand("start_ping_loop");
-	console.error(error)
+	await runCommand("start_ping_loop");
 };
 
 export async function stopPinging() {

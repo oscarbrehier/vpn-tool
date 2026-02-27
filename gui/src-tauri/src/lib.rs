@@ -8,6 +8,7 @@ use tauri::{
     Manager,
 };
 use tauri_plugin_dialog;
+use tauri_plugin_store::StoreExt;
 
 use crate::commands::{
     pinger::PingHandle,
@@ -28,18 +29,27 @@ pub struct TunnelPayload {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     dotenvy::dotenv().ok();
-
+    
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(TunnelState::default())
         .manage(PingHandle(Mutex::new(None)))
         .setup(|app| {
+            let data_dir = app
+                .path()
+                .app_local_data_dir()
+                .expect("failed to get data dir");
+            std::fs::create_dir_all(&data_dir).ok();
+
+            let _store = app.store("tunnels.json")?;
+
             let handle = app.handle().clone();
-
-            tauri::async_runtime::block_on(async {
+            tauri::async_runtime::spawn(async move {
                 sync_tunnel_state(handle.clone()).await;
+                start_monitoring(handle);
             });
-
-            start_monitoring(handle);
 
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
@@ -57,27 +67,27 @@ pub fn run() {
                     }
                     _ => {}
                 })
-                .on_tray_icon_event(|tray, event| {
-                    match event {
-                        TrayIconEvent::Click {
-                            button: tauri::tray::MouseButton::Left,
-                            ..
-                        } => {
-                            let app = tray.app_handle();
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                .on_tray_icon_event(|tray, event| match event {
+                    TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        ..
+                    } => {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
                         }
-                        _ => {}
                     }
+                    _ => {}
                 })
                 .build(app)?;
 
+            if let Some(window) = app.get_webview_window("main") {
+                window.show().unwrap();
+            }
+
             Ok(())
         })
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::tunnel::setup_server,
             commands::tunnel::toggle_vpn,

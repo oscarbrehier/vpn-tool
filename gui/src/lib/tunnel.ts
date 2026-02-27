@@ -1,32 +1,30 @@
-import { message } from "@tauri-apps/plugin-dialog";
 import { GeoLocation, getGeoLocation } from "./geo";
 import { runCommand } from "./tauri";
-import { toast } from "vue-sonner";
 
-export interface VpnConfig {
+export interface TunnelMetadata {
+	client_ip: string;
 	name: string;
-	file_path: string;
-	location?: GeoLocation;
-}
+	server_public_key: string;
+	public_ip: string;
+	location: GeoLocation;
+};
 
-export async function getConfigurations(): Promise<VpnConfig[]> {
+export async function getConfigurations(): Promise<TunnelMetadata[]> {
 
-	const { data: confs, error } = await runCommand<string[]>("get_configs", true);
+	const { data: confs, error } = await runCommand<Omit<TunnelMetadata, "location">[]>("get_configs", true);
 
 	if (error || !confs) return [];
 
 	const locationsPromises = confs.map(async (conf) => {
 
-		const lastIndex = conf.lastIndexOf('.');
-		const ip = lastIndex !== -1 ? conf.substring(0, lastIndex) : conf;
+		const ip = conf.name.split("-")[1];
 
 		const res = await getGeoLocation(ip);
 
 		if (!res) return null;
 
 		return {
-			name: ip,
-			file_path: conf,
+			...conf,
 			location: res
 		};
 
@@ -41,6 +39,14 @@ export async function stopTunnel(): Promise<{ error: string | null }> {
 	return await runCommand("stop_tunnel", true);
 };
 
-export async function quickConnect(): Promise<void> {
-	await runCommand("quick_connect", true);
+export async function quickConnect(): Promise<boolean> {
+
+	const { data, error } = await runCommand<{ config_name: string, success: boolean }>("quick_connect", true);
+
+	if (error) {
+		return false;
+	};
+
+	return data?.success ?? false;
+
 };

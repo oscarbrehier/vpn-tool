@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch, nextTick } from 'vue';
-import { getConfigurations, VpnConfig } from '../lib/tunnel';
+import { getConfigurations, TunnelMetadata } from '../lib/tunnel';
 import { invoke } from '@tauri-apps/api/core';
 import { getGeoLocation } from '../lib/geo';
 
@@ -10,7 +10,7 @@ const svgContent = ref('');
 const dotPos = reactive({ x: 0, y: 0 });
 const isDragging = ref(false);
 
-const allMarkers = ref<(VpnConfig & { x: 0, y: 0 })[]>([]);
+const allMarkers = ref<(TunnelMetadata & { x: 0, y: 0 })[]>([]);
 
 const SVG_W = 2000;
 const SVG_H = 857;
@@ -250,12 +250,12 @@ watch(() => props.tunnel, async (addr) => {
 
 }, { immediate: true });
 
-async function startTunnel(conf: VpnConfig) {
+async function startTunnel(conf: TunnelMetadata) {
 
 	try {
 
 		await invoke("start_tunnel", {
-			confName: conf.file_path
+			confName: conf.public_ip
 		});
 
 	} catch (err) {
@@ -302,7 +302,7 @@ async function startTunnel(conf: VpnConfig) {
 			}">
 				<g v-html="svgContent" class="fill-[#2b2c36] stroke-[#676a82]/20"></g>
 
-				<template v-for="p in allMarkers" :key="p.file_path">
+				<template v-for="p in allMarkers" :key="p.name">
 					<circle v-if="p.name !== props.tunnel" :cx="p.x" :cy="p.y" @click="startTunnel(p)" r="3"
 						fill="url(#dot)" />
 				</template>

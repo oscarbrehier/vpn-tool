@@ -4,7 +4,9 @@ use std::{
     process::Command,
 };
 
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_store::StoreExt;
 use vpn_lib::{
     self,
     ssh::{connect_ssh, harden_ssh},
@@ -12,10 +14,23 @@ use vpn_lib::{
     wireguard::{client::list_local_configs, server::setup_wireguard},
 };
 
-use crate::{TunnelPayload, TunnelState};
+use crate::{
+    TunnelPayload, TunnelState, commands::{tunnel::metadata::{TunnelMetadata, get_all_tunnels, save_metadata_to_store}, utils::save_key_securely}
+};
+
+#[derive(Serialize)]
+pub struct ConnectResponse {
+    pub config_name: String,
+    pub success: bool,
+}
 
 #[tauri::command]
-pub async fn setup_server(server_ip: String, user: String, key_file: String) -> Result<(), String> {
+pub async fn setup_server(
+    app: AppHandle,
+    server_ip: String,
+    user: String,
+    key_file: String,
+) -> Result<(), String> {
     println!("{}|{}|{}", server_ip, user, key_file);
 
     let ip: Ipv4Addr = server_ip
@@ -30,9 +45,19 @@ pub async fn setup_server(server_ip: String, user: String, key_file: String) -> 
         .await
         .map_err(|e| e.to_string())?;
 
-    setup_wireguard(&session, ip, "eth0".into())
+    let result = setup_wireguard(&session, ip, "eth0".into())
         .await
         .map_err(|e| e.to_string())?;
+
+    let metadata: TunnelMetadata = result.clone().into();
+
+    save_key_securely(result.public_ip, &result.client_private_key)
+        .await
+        .map_err(|e| e.to_string())?;
+
+
+    save_metadata_to_store(&app, metadata)?;
+
     harden_ssh(&session).await.map_err(|e| e.to_string())?;
 
     Ok(())
@@ -72,9 +97,9 @@ pub async fn toggle_vpn(connect: bool) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub async fn get_configs() -> Result<Vec<String>, String> {
-    let conf_dir = Path::new("conf");
-    list_local_configs(conf_dir).map_err(|e| e.to_string())
+pub async fn get_configs(app: AppHandle) -> Result<Vec<TunnelMetadata>, String> {
+    let tunnels = get_all_tunnels(&app)?;
+    Ok(tunnels)
 }
 
 #[tauri::command]
@@ -183,18 +208,22 @@ pub async fn stop_tunnel(
 }
 
 #[tauri::command]
-pub async fn quick_connect(app: AppHandle, state: State<'_, TunnelState>) -> Result<String, String> {
+pub async fn quick_connect(
+    app: AppHandle,
+    state: State<'_, TunnelState>,
+) -> Result<ConnectResponse, String> {
+    // let configs = get_configs().await?;
 
-    let configs = get_configs().await?;
+    // let first_config = configs
+    //     .first()
+    //     .ok_or_else(|| "No VPN configurations found".to_string())?;
 
-    let first_config = configs
-        .first()
-        .ok_or_else(|| "No VPN configurations found".to_string())?;
+    // let config_name = first_config.clone();
 
-    let config_name = first_config.clone();
+    // start_tunnel(app, state, config_name.clone()).await?;
 
-    start_tunnel(app, state, config_name.clone()).await?;
-
-    Ok(config_name)
-
+    Ok(ConnectResponse {
+        config_name: "hello".to_string(),
+        success: true,
+    })
 }

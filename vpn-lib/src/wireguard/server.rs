@@ -8,11 +8,17 @@ use crate::{
 };
 use base64::{Engine, engine::general_purpose};
 use rand_core::OsRng;
-use std::{
-    net::{Ipv4Addr},
-    path::Path,
-};
+use secrecy::{ExposeSecret, SecretString};
+use std::{net::Ipv4Addr, path::Path};
 use x25519_dalek::{PublicKey, StaticSecret};
+
+#[derive(Debug, Clone)]
+pub struct SetupResult {
+    pub client_private_key: SecretString,
+    pub server_public_key: String,
+    pub client_ip: Ipv4Addr,
+    pub public_ip: Ipv4Addr
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
@@ -24,14 +30,14 @@ pub enum ServerError {
     State(#[from] crate::wireguard::state::StateError),
 }
 
-pub fn generate_keys() -> (String, String) {
+pub fn generate_keys() -> (SecretString, String) {
     let secret = StaticSecret::random_from_rng(OsRng);
     let public = PublicKey::from(&secret);
 
     let priv_b64 = general_purpose::STANDARD.encode(secret.to_bytes());
     let pub_b64 = general_purpose::STANDARD.encode(public.to_bytes());
 
-    (priv_b64, pub_b64)
+    (SecretString::new(priv_b64.into()), pub_b64)
 }
 
 fn build_server_config(
@@ -62,7 +68,7 @@ AllowedIPs = {client_ip}/32
 pub fn build_client_config(
     client_priv: &str,
     server_pub: &str,
-    vps_ip: Ipv4Addr,
+    public_ip: Ipv4Addr,
     peer_ip: Ipv4Addr,
 ) -> String {
     format!(
@@ -73,17 +79,18 @@ DNS = 1.1.1.1
 
 [Peer]
 PublicKey = {server_pub}
-Endpoint = {vps_ip}:51820
+Endpoint = {public_ip}:51820
 AllowedIPs = 0.0.0.0/0
 "#
     )
 }
 
 pub async fn upload_file(session: &SshSession, path: &Path, content: &str) -> anyhow::Result<()> {
+    let b64_content = general_purpose::STANDARD.encode(content);
     let cmd = format!(
-        "cat << 'EOF' | sudo tee {} > /dev/null\n{}\nEOF",
-        path.to_string_lossy(),
-        content
+        "echo '{}' | base64 -d | sudo tee {}",
+        b64_content,
+        path.display()
     );
 
     let (output, status) = run_remote_cmd(session, &cmd).await?;
@@ -92,20 +99,16 @@ pub async fn upload_file(session: &SshSession, path: &Path, content: &str) -> an
         anyhow::bail!("Failed to upload file to {}: {}", path.display(), output);
     }
 
-    run_remote_cmd(
-        session,
-        &format!("sudo chmod 600 {}", path.to_string_lossy()),
-    )
-    .await?;
+    run_remote_cmd(session, &format!("sudo chmod 600 {}", path.display())).await?;
 
     Ok(())
 }
 
 pub async fn setup_wireguard(
     session: &SshSession,
-    vps_ip: Ipv4Addr,
+    public_ip: Ipv4Addr,
     interface: &str,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SetupResult> {
     let (_, status) = run_remote_cmd(session, "which wg").await?;
 
     if status != 0 {
@@ -118,11 +121,11 @@ pub async fn setup_wireguard(
     let (server_priv, server_pub) = generate_keys();
     let (new_peer, peer_priv_key) = Peer::new("initial-client".into(), Ipv4Addr::new(10, 0, 0, 2));
 
-    let mut state = VpnState::new(server_pub.clone(), vps_ip);
+    let mut state = VpnState::new(server_pub.clone(), public_ip);
     state.peers.push(new_peer.clone());
 
     let server_config =
-        build_server_config(&server_priv, &new_peer.public_key, interface, new_peer.ip);
+        build_server_config(&server_priv.expose_secret(), &new_peer.public_key, interface, new_peer.ip);
 
     run_remote_cmd(
         session,
@@ -138,16 +141,7 @@ pub async fn setup_wireguard(
 
     save_state(session, &state).await?;
 
-    let client_config = build_client_config(&peer_priv_key, &server_pub, vps_ip, new_peer.ip);
-
-    let filename = format!("conf/wg_{}.conf", vps_ip);
-    std::fs::create_dir_all("conf")?;
-    std::fs::write(&filename, &client_config)?;
-
-    println!("Success! Configuration saved to: {}", filename);
-    println!("Import this file into Wireguard Client to connect");
-
-    Ok(())
+    Ok(SetupResult { client_private_key: peer_priv_key, server_public_key: server_pub, client_ip: new_peer.ip, public_ip })
 }
 
 pub async fn update_wireguard_config(session: &SshSession, state: &VpnState) -> anyhow::Result<()> {

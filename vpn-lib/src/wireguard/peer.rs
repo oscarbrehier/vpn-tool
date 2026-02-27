@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use std::fmt::{self};
 use std::net::Ipv4Addr;
@@ -19,7 +20,7 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn new(name: String, ip: Ipv4Addr) -> (Self, String) {
+    pub fn new(name: String, ip: Ipv4Addr) -> (Self, SecretString) {
         let (priv_key, pub_key) = generate_keys();
         (
             Self {
@@ -59,7 +60,7 @@ pub async fn add_new_peer(
     save_state(session, &state).await?;
     update_wireguard_config(session, &state).await?;
 
-    let client_config = build_client_config(&priv_key, &state.server_public_key, state.server_ip, next_ip);
+    let client_config = build_client_config(&priv_key.expose_secret(), &state.server_public_key, state.server_ip, next_ip);
 
     anyhow::Ok(client_config)
 }
