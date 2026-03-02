@@ -4,11 +4,14 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::time::sleep;
 
 use crate::{
-    TunnelPayload, TunnelState, commands::tunnel::{get_configs, is_tunnel_active, metadata::get_all_tunnels}
+    commands::tunnel::{get_configs, is_tunnel_active, metadata::get_all_tunnels},
+    TunnelPayload, TunnelState,
 };
 
 pub fn start_monitoring(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
+        let mut missing_strikes = 0;
+
         loop {
             let name_to_check = {
                 let state = app.state::<TunnelState>();
@@ -18,19 +21,28 @@ pub fn start_monitoring(app: AppHandle) {
 
             if let Some(name) = name_to_check {
                 if !is_tunnel_active(name) {
-                    let state = app.state::<TunnelState>();
-                    let mut active_lock = state.active_tunnel.lock().unwrap();
-                    *active_lock = None;
+                    missing_strikes += 1;
 
-                    app.emit(
-                        "tunnel-status",
-                        TunnelPayload {
-                            name: None,
-                            is_active: false,
-                        },
-                    )
-                    .unwrap();
+                    if missing_strikes >= 2 {
+                        let state = app.state::<TunnelState>();
+                        let mut active_lock = state.active_tunnel.lock().unwrap();
+                        *active_lock = None;
+
+                        app.emit(
+                            "tunnel-status",
+                            TunnelPayload {
+                                name: None,
+                                is_active: false,
+                            },
+                        )
+                        .unwrap();
+                        missing_strikes = 0;
+                    }
+                } else {
+                    missing_strikes = 0;
                 }
+            } else {
+                missing_strikes = 0;
             }
 
             sleep(Duration::from_secs(2)).await;

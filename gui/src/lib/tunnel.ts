@@ -1,6 +1,11 @@
 import { GeoLocation, getGeoLocation } from "./geo";
 import { runCommand } from "./tauri";
 
+export interface TunnelStatus {
+	name: string | null;
+	is_active: boolean;
+};
+
 export interface TunnelMetadata {
 	client_ip: string;
 	name: string;
@@ -35,6 +40,12 @@ export async function getConfigurations(): Promise<TunnelMetadata[]> {
 
 };
 
+export async function startTunnel(conf: TunnelMetadata) {
+	await runCommand("start_tunnel", true, {
+		publicIp: conf.public_ip
+	});
+};
+
 export async function stopTunnel(): Promise<{ error: string | null }> {
 	return await runCommand("stop_tunnel", true);
 };
@@ -52,6 +63,5 @@ export async function quickConnect(): Promise<boolean> {
 };
 
 export async function getTunnelStatus() {
-	const { data } = await runCommand("get_current_tunnel_status", true);
-	console.log(data); 
+	return await runCommand<TunnelStatus>("get_current_tunnel_status", true);
 }

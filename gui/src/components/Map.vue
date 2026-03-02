@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch, nextTick } from 'vue';
-import { getConfigurations, TunnelMetadata } from '../lib/tunnel';
+import { getConfigurations, startTunnel, TunnelMetadata } from '../lib/tunnel';
 import { invoke } from '@tauri-apps/api/core';
 import { getGeoLocation } from '../lib/geo';
+import { runCommand } from '../lib/tauri';
 
 const props = defineProps(['tunnel', 'isConnected']);
 
@@ -234,11 +235,15 @@ onMounted(async () => {
 
 });
 
-watch(() => props.tunnel, async (addr) => {
+watch(() => [props.tunnel, props.isConnected], async ([addr, connected]) => {
+
+	console.log("Map Watch Triggered:", { addr, connected });
 
 	if (addr && svgContent.value) {
 
 		await nextTick();
+
+		console.log("Fetching geo for:", addr);
 
 		const res = await getGeoLocation(addr);
 
@@ -250,19 +255,6 @@ watch(() => props.tunnel, async (addr) => {
 
 }, { immediate: true });
 
-async function startTunnel(conf: TunnelMetadata) {
-
-	try {
-
-		await invoke("start_tunnel", {
-			confName: conf.public_ip
-		});
-
-	} catch (err) {
-		console.error(err);
-	}
-
-};
 </script>
 
 <template>
@@ -303,8 +295,8 @@ async function startTunnel(conf: TunnelMetadata) {
 				<g v-html="svgContent" class="fill-[#2b2c36] stroke-[#676a82]/20"></g>
 
 				<template v-for="p in allMarkers" :key="p.name">
-					<circle v-if="p.name !== props.tunnel" :cx="p.x" :cy="p.y" @click="startTunnel(p)" r="3"
-						fill="url(#dot)" />
+					<circle class="hover:cursor-default" v-if="p.name !== props.tunnel" :cx="p.x" :cy="p.y"
+						@click="startTunnel(p)" r="3" fill="url(#dot)" />
 				</template>
 
 				<circle :cx="dotPos.x" :cy="dotPos.y" r="3" :fill="isConnected ? 'url(#dot-on)' : 'url(#dot-off)'" />

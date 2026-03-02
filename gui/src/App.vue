@@ -7,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getGeoLocation } from "./lib/geo";
 import { listen } from "@tauri-apps/api/event";
 import { getTunnelStatus, quickConnect, stopTunnel, TunnelMetadata } from "./lib/tunnel";
-import { Toaster } from 'vue-sonner';
+import { toast, Toaster } from 'vue-sonner';
 import 'vue-sonner/style.css'
 import Toolbar from "./components/Toolbar.vue";
 import { startPinging, stopPinging } from "./lib/network";
@@ -20,7 +20,7 @@ interface TunnelPayload {
 };
 
 const isConnected = ref(false);
-const isConnecting = ref(false);
+const isPending = ref(false);
 
 const isSettingsOpen = ref(false);
 const activeTunnel = ref<string | null>(null);
@@ -38,16 +38,27 @@ const networkData = ref<{ latency: null | number }>({
 const availableEndpoints = ref<any[]>([]);
 
 async function toggleConnection() {
+	
+	isPending.value = true;
 
 	if (isConnected.value) {
 		await stopTunnel();
 	} else {
-
-		isConnecting.value = true;
 		await quickConnect();
-		isConnecting.value = false;
-
 	};
+
+	try {
+		const { data } = await getTunnelStatus();
+		if (data) {
+			isConnected.value = data.is_active;
+			activeTunnel.value = data.name;
+			console.log(data)
+		};
+	} catch (err) {
+		toast("Failed to sync connection status");
+	};
+
+	isPending.value = false;
 
 };
 
@@ -82,6 +93,8 @@ onMounted(async () => {
 
 		const status = await invoke<TunnelPayload>('get_current_tunnel_status');
 
+		console.log(status);
+
 		isConnected.value = status.is_active;
 		activeTunnel.value = status.name;
 
@@ -106,6 +119,10 @@ onMounted(async () => {
 });
 
 watch(() => isConnected.value, async (connected) => {
+
+	if (!connected) {
+		await new Promise(r => setTimeout(r, 500));
+	}
 
 	const data = await getGeoLocation();
 
@@ -155,10 +172,10 @@ const closeSettings = () => isSettingsOpen.value = false;
 
 			<div class="flex justify-center items-center mb-8">
 
-				<button @click="toggleConnection" :disabled="isConnecting"
+				<button @click="toggleConnection" :disabled="isPending"
 					class="h-12 w-52 capitalize font-semibold text-lg select-none flex items-center justify-center disabled:bg-neutral-500 disabled:text-neutral-800"
 					:class="isConnected ? 'bg-neutral-500 text-neutral-100' : 'bg-accent-500 text-black '">
-					<span v-if="isConnecting" class="flex items-center gap-x-4">
+					<span v-if="isPending" class="flex items-center gap-x-4">
 						<Loader2 class="animate-spin" />
 					</span>
 					<span v-else>
