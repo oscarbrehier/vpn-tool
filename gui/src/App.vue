@@ -6,17 +6,22 @@ import Settings from "./components/Settings.vue";
 import { invoke } from "@tauri-apps/api/core";
 import { GeoLocation, getGeoLocation } from "./lib/geo";
 import { listen } from "@tauri-apps/api/event";
-import { getTunnelStatus, quickConnect, stopTunnel, TunnelMetadata } from "./lib/tunnel";
+import { getTunnelStatus, quickConnect, startTunnel, stopTunnel, TunnelMetadata } from "./lib/tunnel";
 import { toast, Toaster } from 'vue-sonner';
 import 'vue-sonner/style.css'
 import Toolbar from "./components/Toolbar.vue";
 import { startPinging, stopPinging } from "./lib/network";
 import { Loader, Loader2, Search, ServerCog, X } from "lucide-vue-next";
-
+import NodeSelector from "./components/NodeSelector.vue";
 
 interface TunnelPayload {
 	name: string;
 	is_active: boolean;
+};
+
+export interface UnifiedEndpoint {
+	geo: GeoLocation;
+	config: TunnelMetadata;
 };
 
 const isConnected = ref(false);
@@ -37,7 +42,7 @@ const networkData = ref<{ latency: null | number }>({
 	latency: null
 });
 
-const availableEndpoints = ref<GeoLocation[]>([]);
+const availableEndpoints = ref<UnifiedEndpoint[]>([]);
 
 async function toggleConnection() {
 
@@ -71,21 +76,19 @@ async function getAvailableEndpoints() {
 	const locationsPromises = confs.map(async (conf) => {
 
 		const ip = conf.name.split("-")[1];
-
-		console.log(ip)
-
 		const res = await getGeoLocation(ip);
-		console.log(res)
-		return res;
+
+		if (!res) return null;
+
+		return {
+			geo: res,
+			config: conf
+		};
 
 	});
 
-	const locations = await Promise.all(locationsPromises);
-	const validLocations = locations.filter(i => i !== null);
-
-	console.log(validLocations)
-
-	return validLocations;
+	const results = await Promise.all(locationsPromises);
+	return results.filter((i): i is UnifiedEndpoint => i !== null);
 
 };
 
@@ -227,51 +230,7 @@ const toggleServerSelection = () => serverSelection.value = !serverSelection.val
 
 		<Settings :isOpen="isSettingsOpen" @close="isSettingsOpen = false" />
 
-		<Transition name="slide">
-			<div v-if="serverSelection" class="absolute z-80 w-96 h-full p-4">
-
-				<div
-					class="w-full h-full bg-neutral-800/50 rounded-lg backdrop-blur-sm p-4 border border-neutral-400/10 select-none">
-
-					<div class="w-full flex items-start justify-between gap-x-8">
-
-						<div>
-							<p class="font-medium text-lg select-none text-neutral-100">Server list</p>
-							<p class="font-medium text-sm select-none text-neutral-400">Select a server to continue with
-								a
-								secure connection</p>
-						</div>
-
-						<button @click="toggleServerSelection" class="rounded-full bg-neutral-700 p-1.5">
-							<X class="text-neutral-100" :size="18" />
-						</button>
-
-					</div>
-
-					<div class="h-10 w-full rounded-md bg-neutral-700 mt-6 flex items-center px-4 space-x-4">
-						<Search class="text-neutral-400" :size="20" />
-						<input placeholder="Search..." class="outline-none" />
-					</div>
-
-					<div class="mt-10 overflow-y-auto max-h-[calc(100vh-250px)] pr-2">
-						<TransitionGroup name="stagger" appear>
-							<div v-for="(i, index) in availableEndpoints" :key="i.ip"
-								:style="{ transitionDelay: `${index * 50}ms` }"
-								class="flex items-center gap-x-4 bg-neutral-700/40 hover:bg-neutral-700/80 p-3 rounded-md mb-2 cursor-pointer transition-colors">
-								<div class="w-10 rounded-sm overflow-hidden border border-white/5">
-									<img :src="`https://flagcdn.com/h80/${i.country_code.toLowerCase()}.webp`"
-										class="w-full h-full object-cover" />
-								</div>
-								<p class="text-neutral-100 text-sm font-medium">{{ i.country }}</p>
-							</div>
-						</TransitionGroup>
-					</div>
-
-				</div>
-
-			</div>
-		</Transition>
-
+		<NodeSelector :isOpen="serverSelection" :endpoints="availableEndpoints" :activeTunnel="activeTunnel" :isPending="isPending" @close="serverSelection = false" @connect="connectTo" />
 
 	</main>
 
