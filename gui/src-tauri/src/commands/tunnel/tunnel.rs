@@ -10,8 +10,10 @@ use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
+use tokio::time::timeout;
 use vpn_lib::{
     self,
+    network::ping_endpoint,
     ssh::{connect_ssh, harden_ssh},
     validate_key_file,
     wireguard::{
@@ -153,12 +155,13 @@ pub async fn start_tunnel(
         .get(&public_ip_str)
         .ok_or_else(|| format!("No metadata found for {}", public_ip_str))?;
 
-    let client_ip = Ipv4Addr::from_str(metadata_value["client_ip"].as_str().unwrap_or("10.0.0.2")).map_err(|e| e.to_string())?;
+    let client_ip = Ipv4Addr::from_str(metadata_value["client_ip"].as_str().unwrap_or("10.0.0.2"))
+        .map_err(|e| e.to_string())?;
 
     let server_pub_key = metadata_value["server_public_key"].as_str().unwrap_or("");
 
-    let client_private_key =
-        load_key_securely(&app, public_ip).map_err(|e| format!("Failed to load private key: {}", e))?;
+    let client_private_key = load_key_securely(&app, public_ip)
+        .map_err(|e| format!("Failed to load private key: {}", e))?;
 
     let wg_config = build_client_config(
         client_private_key.expose_secret(),
@@ -198,7 +201,6 @@ pub async fn stop_tunnel(
     let mut active_lock = state.active_tunnel.lock().unwrap();
 
     if let Some(ip) = active_lock.take() {
-
         vpn_lib::wireguard::client::stop_tunnel(&ip).map_err(|e| e.to_string())?;
 
         let app_dir = app.path().app_data_dir().ok();
@@ -206,8 +208,6 @@ pub async fn stop_tunnel(
             let config_path = path.join(format!("{}.conf", ip));
             let _ = fs::remove_file(config_path);
         }
-
-
     }
 
     app.emit(
@@ -229,14 +229,46 @@ pub async fn quick_connect(
 ) -> Result<ConnectResponse, String> {
     let configs = get_all_tunnels(&app)?;
 
-    let first_config = configs
-        .first()
-        .ok_or_else(|| "No VPN configurations found".to_string())?;
+    let best_node = timeout(
+        tokio::time::Duration::from_secs(3),
+        get_optimal_node(&configs),
+    )
+    .await
+    .map_err(|_| "Server selection timed out".to_string())??;
 
-    start_tunnel(app, state, first_config.public_ip.clone()).await?;
+    start_tunnel(app, state, best_node.public_ip).await?;
 
     Ok(ConnectResponse {
-        config_name: first_config.name.clone(),
+        config_name: best_node.name.clone(),
         success: true,
     })
+}
+
+async fn get_optimal_node(tunnels: &[TunnelMetadata]) -> Result<TunnelMetadata, String> {
+    let mut tasks = Vec::new();
+
+    for tunnel in tunnels {
+        let t = tunnel.clone();
+        tasks.push(tokio::spawn(async move {
+            if let Some(latency) = ping_endpoint(t.public_ip).await {
+                return Some((t, latency));
+            }
+            None
+        }));
+    }
+
+    let mut results = Vec::new();
+    for task in tasks {
+        if let Ok(Some(res)) = task.await {
+            results.push(res);
+        }
+    }
+
+    results.sort_by_key(|k| k.1);
+
+    if !results.is_empty() {
+        Ok(results.remove(0).0)
+    } else {
+        Err("All endpoints are unreachable".to_string())
+    }
 }

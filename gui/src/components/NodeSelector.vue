@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Search, X } from 'lucide-vue-next';
 import { UnifiedEndpoint } from '../App.vue';
 import { TunnelMetadata } from '../lib/tunnel';
 
@@ -29,9 +30,7 @@ const emit = defineEmits<{
 
 					<div>
 						<p class="font-medium text-lg select-none text-neutral-100">Server list</p>
-						<p class="font-medium text-sm select-none text-neutral-400">Select a server to continue with
-							a
-							secure connection</p>
+						<p class="font-medium text-sm select-none text-neutral-400">Select a server to continue with a secure connection</p>
 					</div>
 
 					<button @click="emit('close')" class="rounded-full bg-neutral-700 p-1.5">
