@@ -2,7 +2,6 @@
 import { onMounted, ref, watch } from "vue";
 import "./assets/globals.css";
 import Map from "./components/Map.vue";
-import Settings from "./components/Settings.vue";
 import { invoke } from "@tauri-apps/api/core";
 import { GeoLocation, getGeoLocation } from "./lib/geo";
 import { listen } from "@tauri-apps/api/event";
@@ -11,7 +10,7 @@ import { toast, Toaster } from 'vue-sonner';
 import 'vue-sonner/style.css'
 import Toolbar from "./components/Toolbar.vue";
 import { startPinging, stopPinging } from "./lib/network";
-import { Loader, Loader2, Search, ServerCog, X } from "lucide-vue-next";
+import { Loader2, ServerCog } from "lucide-vue-next";
 import NodeSelector from "./components/NodeSelector.vue";
 
 interface TunnelPayload {
@@ -27,7 +26,6 @@ export interface UnifiedEndpoint {
 const isConnected = ref(false);
 const isPending = ref(false);
 
-const isSettingsOpen = ref(false);
 const activeTunnel = ref<string | null>(null);
 const mapFocusIp = ref<string | null>(null);
 
@@ -151,14 +149,11 @@ watch(() => isConnected.value, async (connected) => {
 
 }, { immediate: true });
 
-const openSettings = () => isSettingsOpen.value = true;
-const closeSettings = () => isSettingsOpen.value = false;
-
 const toggleServerSelection = () => serverSelection.value = !serverSelection.value;
 
 async function connectTo(conf: TunnelMetadata) {
 
-	if (isPending.value || activeTunnel.value === conf.public_ip) return ;
+	if (isPending.value || activeTunnel.value === conf.public_ip) return;
 
 	isPending.value = true;
 
@@ -185,12 +180,9 @@ async function connectTo(conf: TunnelMetadata) {
 
 		<Map :tunnel="mapFocusIp" :isConnected="isConnected" />
 
-
 		<!-- gradient -->
 		<div class="absolute h-full w-full bg-linear-to-b via-transparent to-black/10 z-20 pointer-events-none transition-colors duration-1000"
 			:class="isConnected ? 'from-accent-500/30' : 'from-brand-500/30'" />
-
-		<Toolbar :isOpen="isSettingsOpen" v-on:open="openSettings" v-on:close="closeSettings" />
 
 		<div class="absolute z-50 bottom-0 left-0 w-full p-4 flex flex-col items-center">
 
@@ -198,7 +190,7 @@ async function connectTo(conf: TunnelMetadata) {
 
 				<button @click="toggleConnection" :disabled="isPending"
 					class="h-12 w-52 capitalize font-semibold text-lg select-none flex items-center justify-center disabled:bg-neutral-500 disabled:text-neutral-800"
-					:class="isConnected ? 'bg-neutral-500 text-neutral-100' : 'bg-accent-500 text-black '">
+					:class="isConnected ? 'bg-neutral-500 text-neutral-100' : 'bg-accent-500 text-black'">
 					<span v-if="isPending" class="flex items-center gap-x-4">
 						<Loader2 class="animate-spin" />
 					</span>
@@ -244,10 +236,10 @@ async function connectTo(conf: TunnelMetadata) {
 
 		</div>
 
+		<NodeSelector :isOpen="serverSelection" :endpoints="availableEndpoints" :activeTunnel="activeTunnel"
+			:isPending="isPending" @close="serverSelection = false" @connect="connectTo" />
 
-		<Settings :isOpen="isSettingsOpen" @close="isSettingsOpen = false" />
-
-		<NodeSelector :isOpen="serverSelection" :endpoints="availableEndpoints" :activeTunnel="activeTunnel" :isPending="isPending" @close="serverSelection = false" @connect="connectTo" />
+		<Toolbar />
 
 	</main>
 

@@ -147,6 +147,7 @@
 @layer base {
 	* {
 		@apply border-border;
+		user-select: none;
 	}
 
 	body {
@@ -191,6 +192,15 @@
 
 .stagger-move {
 	transition: transform 1s ease;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+	display: none;
+}
+
+.hide-scrollbar {
+	scrollbar-width: none;
+	-ms-overflow-style: none;
 }
 
 /* From Uiverse.io by Ashon-G */

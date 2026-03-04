@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Search, X } from 'lucide-vue-next';
+import { Plus, Search, X } from 'lucide-vue-next';
 import { UnifiedEndpoint } from '../App.vue';
 import { TunnelMetadata } from '../lib/tunnel';
+import { computed, ref } from 'vue';
+import NewConfigurationModal from './NewConfigurationModal.vue';
 
-
-defineProps<{
+const props = defineProps<{
 	isOpen: boolean;
 	endpoints: UnifiedEndpoint[];
 	activeTunnel: string | null;
@@ -12,15 +13,36 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'close'): void;
-  (e: 'connect', config: TunnelMetadata): void;
+	(e: 'close'): void;
+	(e: 'connect', config: TunnelMetadata): void;
 }>();
+
+const query = ref<string>("");
+const configurrationModal = ref(false);
+
+const filteredEndpoints = computed(() => {
+
+	if (!query.value) return props.endpoints;
+
+	const q = query.value.toLowerCase();
+
+	console.log(q)
+	console.log(props.endpoints)
+
+	return props.endpoints.filter(
+		i => i.config.name.toLowerCase().includes(q)
+	);
+
+});
 
 </script>
 
 <template>
 
+	<NewConfigurationModal :is-open="configurrationModal" @close="configurrationModal = false" />
+
 	<Transition name="slide">
+
 		<div v-if="isOpen" class="absolute z-80 w-96 h-full p-4">
 
 			<div
@@ -30,7 +52,8 @@ const emit = defineEmits<{
 
 					<div>
 						<p class="font-medium text-lg select-none text-neutral-100">Server list</p>
-						<p class="font-medium text-sm select-none text-neutral-400">Select a server to continue with a secure connection</p>
+						<p class="font-medium text-sm select-none text-neutral-400">Select a server to continue with a
+							secure connection</p>
 					</div>
 
 					<button @click="emit('close')" class="rounded-full bg-neutral-700 p-1.5">
@@ -39,14 +62,24 @@ const emit = defineEmits<{
 
 				</div>
 
-				<div class="h-10 w-full rounded-md bg-neutral-700 mt-6 flex items-center px-4 space-x-4">
-					<Search class="text-neutral-400" :size="20" />
-					<input placeholder="Search..." class="outline-none" />
+				<div class="w-full flex items-center justify-between space-x-2 mt-6">
+
+					<div class="h-10 flex-1 rounded-md bg-neutral-700/40 flex items-center px-4 space-x-4">
+						<Search class="text-neutral-400" :size="20" />
+						<input v-model="query" placeholder="Search..." class="outline-none" />
+					</div>
+
+					<button @click="configurrationModal = true" class="size-10 bg-neutral-700/40 rounded-md text-neutral-300 flex items-center justify-center hover:bg-neutral-700/80">
+						<Plus />
+					</button>
+
 				</div>
 
-				<div class="mt-10 overflow-y-auto max-h-[calc(100vh-250px)] pr-2">
+				<div class="mt-10 overflow-y-auto max-h-[calc(100vh-250px)] hide-scrollbar">
+
 					<TransitionGroup name="stagger" appear>
-						<button v-for="(endpoint, index) in endpoints" :key="endpoint.config.name"
+
+						<button v-for="(endpoint, index) in filteredEndpoints" :key="endpoint.config.name"
 							@click="emit('connect', endpoint.config)" :style="{ transitionDelay: `${index * 50}ms` }"
 							:disabled="activeTunnel === endpoint.config.public_ip"
 							class="w-full flex items-center justify-between group p-3 rounded-md mb-2 transition-all border"
@@ -55,26 +88,37 @@ const emit = defineEmits<{
 								: 'bg-neutral-700/40 hover:bg-neutral-700/80 border-transparent cursor-pointer'">
 
 							<div class="flex items-center gap-x-4">
+
 								<div class="w-10 rounded-sm overflow-hidden border border-white/5">
 									<img :src="`https://flagcdn.com/h80/${endpoint.geo.country_code.toLowerCase()}.webp`"
 										class="w-full h-full object-cover" />
 								</div>
-								<p class="text-neutral-100 text-sm font-medium">{{ endpoint.geo.country }}</p>
+
+								<p class="text-neutral-100 text-sm font-medium">{{ endpoint.config.name }}</p>
+
 							</div>
 
 							<div v-if="activeTunnel === endpoint.config.public_ip" class="flex items-center gap-x-4">
-								<span
-									class="text-[10px] uppercase tracking-widest font-bold text-accent-500">Connected</span>
+
+								<span class="text-[10px] uppercase tracking-widest font-bold text-accent-500">
+									Connected
+								</span>
+
 								<div
 									class="size-2 rounded-full bg-accent-500 shadow-[0_0_8px_var(--color-accent-500)] animate-pulse" />
+
 							</div>
+
 						</button>
+
 					</TransitionGroup>
+
 				</div>
 
 			</div>
 
 		</div>
+
 	</Transition>
 
 </template>
