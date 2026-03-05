@@ -166,7 +166,14 @@ async function connectTo(conf: TunnelMetadata) {
 		isPending.value = false;
 	};
 
-}
+};
+
+async function refreshEndpoints() {
+	
+	const endpoints = await getAvailableEndpoints();
+	availableEndpoints.value = endpoints;
+
+};
 
 </script>
 
@@ -176,7 +183,7 @@ async function connectTo(conf: TunnelMetadata) {
 		class: 'backdrop-blur-xl !bg-[#19272a]/60 border-t border-white/20 border-x border-b border-white/5'
 	}" :closeButton="true" closeButtonPosition="top-right" position="top-left" theme="dark" richColors />
 
-	<main class="h-screen w-scree bg-cover bg-center isolate">
+	<main class="h-screen w-scree bg-cover bg-center">
 
 		<Map :tunnel="mapFocusIp" :isConnected="isConnected" />
 
@@ -237,7 +244,7 @@ async function connectTo(conf: TunnelMetadata) {
 		</div>
 
 		<NodeSelector :isOpen="serverSelection" :endpoints="availableEndpoints" :activeTunnel="activeTunnel"
-			:isPending="isPending" @close="serverSelection = false" @connect="connectTo" />
+			:isPending="isPending" @close="serverSelection = false" @connect="connectTo" @refresh="refreshEndpoints" />
 
 		<Toolbar />
 

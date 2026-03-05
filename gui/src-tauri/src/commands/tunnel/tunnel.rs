@@ -39,6 +39,7 @@ pub struct ConnectResponse {
 #[tauri::command]
 pub async fn setup_server(
     app: AppHandle,
+    name: String,
     server_ip: String,
     user: String,
     key_file: String,
@@ -61,7 +62,8 @@ pub async fn setup_server(
         .await
         .map_err(|e| e.to_string())?;
 
-    let metadata: TunnelMetadata = result.clone().into();
+    let mut metadata: TunnelMetadata = result.clone().into();
+    metadata.name = name;
 
     save_key_securely(&app, result.public_ip, &result.client_private_key)
         .await

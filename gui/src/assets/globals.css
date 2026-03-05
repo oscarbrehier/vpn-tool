@@ -160,10 +160,17 @@
 	text-wrap: balance;
 }
 
+.blur-padded {
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    -webkit-mask-image: inset(16px round 8px);
+    mask-image: inset(16px round 8px);
+}
+
 .slide-enter-active,
 .slide-leave-active {
 	transition: all 1s cubic-bezier(0.16, 1, 0.3, 1);
-	will-change: transform;
+	/* will-change: transform; */
 }
 
 .slide-enter-from,
