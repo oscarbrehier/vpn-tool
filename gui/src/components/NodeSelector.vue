@@ -78,11 +78,11 @@ onUnmounted(() => {
 
 	<Transition name="slide">
 
-		<div v-if="isOpen" ref="nodeSelectorRef" class="absolute z-100 w-96 h-full pointer-events-none">
+		<div v-if="isOpen" ref="nodeSelectorRef" class="absolute z-100 w-96 h-full">
 
-			<div class="absolute inset-4 pointer-events-auto">
+			<div class="absolute inset-4">
 
-				<div class="w-full h-full bg-neutral-800/50 backdrop-blur-sm rounded-lg p-4 border border-neutral-400/10">
+				<div class="w-full h-full bg-neutral-800 backdrop-blur-sm rounded-lg p-4 border border-neutral-400/10">
 
 					<div class="w-full flex items-start justify-between gap-x-8">
 

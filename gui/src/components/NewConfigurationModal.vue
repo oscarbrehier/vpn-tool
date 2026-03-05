@@ -68,7 +68,7 @@ const closeSettings = () => emit('close');
 
 	<Teleport to="body">
 
-		<Transition name="fade">
+		<Transition>
 
 			<div v-if="isOpen"
 				class="absolute top-0 left-0 z-110 flex items-center justify-center h-screen w-full bg-neutral-700/30 backdrop-blur-xs">
