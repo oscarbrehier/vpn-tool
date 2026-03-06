@@ -1,19 +1,17 @@
 use std::{collections::HashMap, net::Ipv4Addr};
-
-use anyhow::Context;
-use etherparse::SlicedPacket;
 use tokio::sync::mpsc;
 use windivert::{layer::NetworkLayer, packet::WinDivertPacket};
+use windivert_sys::ChecksumFlags;
 
 type ConnectionMap = HashMap<u16, Ipv4Addr>;
 
 fn handle_outbound(
-    packet: &mut WinDivertPacket<'_>,
+    packet: &mut WinDivertPacket<'_, NetworkLayer>,
     virtual_ip: Ipv4Addr,
     interface_i: u32,
     connections: &mut ConnectionMap,
 ) -> anyhow::Result<()> {
-    let data = &mut packet.data;
+    let data = packet.data.to_mut();
 
     if data.len() < 20 {
         anyhow::bail!("Packet too short");
@@ -39,19 +37,19 @@ fn handle_outbound(
     let ip_bytes = virtual_ip.octets();
     data[12..16].copy_from_slice(&ip_bytes);
 
-    packet.address.if_idx = interface_i;
+    packet.address.set_interface_index(interface_i);
     packet.address.set_outbound(true);
 
-    packet.recalculate_checksums()?;
+    packet.recalculate_checksums(ChecksumFlags::new())?;
 
     anyhow::Ok(())
 }
 
 fn handle_inbound(
-    packet: &mut WinDivertPacket<'_>,
+    packet: &mut WinDivertPacket<'_, NetworkLayer>,
     connections: &ConnectionMap,
 ) -> anyhow::Result<()> {
-    let data = &mut packet.data;
+    let data = packet.data.to_mut();
 
     if data.len() < 20 {
         anyhow::bail!("Packet too short");
@@ -69,10 +67,10 @@ fn handle_inbound(
         let ip_bytes = original_ip.octets();
         data[16..20].copy_from_slice(&ip_bytes);
 
-        packet.address.if_idx = 0;
+        packet.address.set_interface_index(0);
         packet.address.set_outbound(false);
 
-        packet.recalculate_checksums()?;
+        packet.recalculate_checksums(ChecksumFlags::new())?;
     } else {
         anyhow::bail!("No tracking entry for port {}", dest_port);
     }
@@ -85,10 +83,10 @@ fn build_filter_string(pids: &[u32], virtual_ip: Ipv4Addr) -> String {
         return "false".into();
     };
 
-    let pid_conditions: Vec<String> = pids
+    let pid_conditions: String = pids
         .iter()
         .map(|pid| format!("processId === {}", pid))
-        .collect()
+        .collect::<Vec<_>>()
         .join(" or ");
 
     format!(
@@ -107,7 +105,7 @@ pub async fn start_packet_redirection(
     use windivert::{WinDivert, prelude::WinDivertFlags};
 
     let mut connections = ConnectionMap::new();
-    let current_filter = build_filter_string(&initial_pids, virtual_ip);
+    let mut current_filter = build_filter_string(&initial_pids, virtual_ip);
 
     let mut divert = WinDivert::network(&current_filter, 0, WinDivertFlags::default())
         .map_err(|e| anyhow::anyhow!("Windivert Error: {}", e))?;
@@ -133,7 +131,7 @@ pub async fn start_packet_redirection(
                     Err(_) => continue,
                 };
 
-                let result = if wd_packet.is_outbound() {
+                let result = if wd_packet.address.outbound() {
                     handle_outbound(&mut wd_packet, virtual_ip, interface_i, &mut connections)
                 } else {
                     handle_inbound(&mut wd_packet, &connections)
