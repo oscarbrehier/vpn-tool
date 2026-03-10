@@ -5,7 +5,7 @@ use std::fmt::{self};
 use std::net::Ipv4Addr;
 
 use crate::ssh::SshSession;
-use crate::wireguard::server::{build_client_config, update_wireguard_config};
+use crate::wireguard::server::{TunnelMode, build_client_config, update_wireguard_config};
 use crate::wireguard::{
     server::generate_keys,
     state::{get_or_create_state, save_state},
@@ -60,7 +60,7 @@ pub async fn add_new_peer(
     save_state(session, &state).await?;
     update_wireguard_config(session, &state).await?;
 
-    let client_config = build_client_config(&priv_key.expose_secret(), &state.server_public_key, state.server_ip, next_ip);
+    let client_config = build_client_config(&priv_key.expose_secret(), &state.server_public_key, state.server_ip, next_ip, &TunnelMode::Full);
 
     anyhow::Ok(client_config)
 }

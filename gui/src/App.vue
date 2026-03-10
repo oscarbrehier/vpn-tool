@@ -3,9 +3,9 @@ import { onMounted, ref, watch } from "vue";
 import "./assets/globals.css";
 import Map from "./components/Map.vue";
 import { invoke } from "@tauri-apps/api/core";
-import { GeoLocation, getGeoLocation } from "./lib/geo";
+import { getGeoLocation } from "./lib/geo";
 import { listen } from "@tauri-apps/api/event";
-import { getTunnelStatus, quickConnect, startTunnel, stopTunnel, TunnelMetadata, TunnelMode } from "./lib/tunnel";
+import { getAvailableEndpoints, getTunnelStatus, quickConnect, startTunnel, stopTunnel, TunnelMetadata, TunnelMode, UnifiedEndpoint } from "./lib/tunnel";
 import { toast, Toaster } from 'vue-sonner';
 import 'vue-sonner/style.css'
 import Toolbar from "./components/Toolbar.vue";
@@ -19,11 +19,6 @@ import SidePanel from "./components/SidePanel.vue";
 interface TunnelPayload {
 	name: string;
 	is_active: boolean;
-};
-
-export interface UnifiedEndpoint {
-	geo: GeoLocation;
-	config: TunnelMetadata;
 };
 
 const isConnected = ref(false);
@@ -45,10 +40,7 @@ const networkData = ref<{ latency: null | number }>({
 
 const availableEndpoints = ref<UnifiedEndpoint[]>([]);
 
-const appRouting = ref();
-
 const activePanel = ref<"nodeSelector" | "appRouting" | null>(null);
-
 const tunnelMode = ref<TunnelMode>("full");
 
 const setTunnelMode = (newMode: TunnelMode) => {
@@ -62,7 +54,7 @@ async function toggleConnection() {
 	if (isConnected.value) {
 		await stopTunnel();
 	} else {
-		await quickConnect();
+		await quickConnect(tunnelMode.value);
 	};
 
 	try {
@@ -77,29 +69,6 @@ async function toggleConnection() {
 	};
 
 	isPending.value = false;
-
-};
-
-async function getAvailableEndpoints() {
-
-	const confs: TunnelMetadata[] = await invoke("get_configs");
-
-	const locationsPromises = confs.map(async (conf) => {
-
-		const ip = conf.name.split("-")[1];
-		const res = await getGeoLocation(ip);
-
-		if (!res) return null;
-
-		return {
-			geo: res,
-			config: conf
-		};
-
-	});
-
-	const results = await Promise.all(locationsPromises);
-	return results.filter((i): i is UnifiedEndpoint => i !== null);
 
 };
 
@@ -172,7 +141,7 @@ async function connectTo(conf: TunnelMetadata) {
 
 	try {
 
-		await startTunnel(conf);
+		await startTunnel(conf, tunnelMode.value);
 		serverSelection.value = false;
 
 	} finally {

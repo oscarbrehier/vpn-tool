@@ -12,17 +12,26 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
 use tokio::{sync::mpsc, time::timeout};
 use vpn_lib::{
-    self, app_filter::shunt::start_packet_redirection, network::ping_endpoint, ssh::{connect_ssh, harden_ssh}, validate_key_file, wireguard::{
+    self,
+    app_filter::shunt::start_packet_redirection,
+    network::ping_endpoint,
+    ssh::{connect_ssh, harden_ssh},
+    validate_key_file,
+    wireguard::{
         client::list_local_configs,
-        server::{build_client_config, setup_wireguard},
-    }
+        server::{TunnelMode, build_client_config, setup_wireguard},
+    },
 };
 
 use crate::{
-    TunnelPayload, TunnelState, commands::{
-        tunnel::{RedirectionState, metadata::{TunnelMetadata, get_all_tunnels, save_metadata_to_store}},
+    commands::{
+        tunnel::{
+            metadata::{get_all_tunnels, save_metadata_to_store, TunnelMetadata},
+            RedirectionState,
+        },
         utils::{load_key_securely, save_key_securely},
-    }
+    },
+    TunnelPayload, TunnelState,
 };
 
 #[derive(Serialize)]
@@ -142,6 +151,7 @@ pub async fn start_tunnel(
     tunnel_state: tauri::State<'_, TunnelState>,
     redirection_state: tauri::State<'_, RedirectionState>,
     public_ip: Ipv4Addr,
+    tunnel_mode: TunnelMode,
 ) -> Result<(), String> {
     let store = app
         .store("tunnels.json")
@@ -166,6 +176,7 @@ pub async fn start_tunnel(
         server_pub_key,
         public_ip,
         client_ip,
+        &tunnel_mode
     );
 
     let app_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -178,22 +189,27 @@ pub async fn start_tunnel(
 
     let interface_i = vpn_lib::wireguard::interface::get_interface_index(client_ip)?;
 
-    println!("Got interface index: {}", interface_i);
+    println!("tunnel mode {:?}", tunnel_mode);
 
-    let (tx, rx) = mpsc::unbounded_channel();
-    tokio::spawn(async move {
-        let _ = start_packet_redirection(Vec::new(), rx, client_ip, interface_i).await;
-    });
+    match tunnel_mode {
+        TunnelMode::Full => {
+            println!("starting tunnel - all traffic");
+        }
+        TunnelMode::Split => {
+            println!("starting tunnel - pid filtering");
 
-    let mut filter_guard = redirection_state.filter_rx.lock().await;
-    *filter_guard = Some(tx);
+            let (tx, rx) = mpsc::unbounded_channel();
+            tokio::spawn(async move {
+                let _ = start_packet_redirection(Vec::new(), rx, client_ip, interface_i).await;
+            });
 
-    println!("applied filter guard to state");
+            let mut filter_guard = redirection_state.filter_rx.lock().await;
+            *filter_guard = Some(tx);
+        }
+    }
 
     let mut active_lock = tunnel_state.active_tunnel.lock().unwrap();
     *active_lock = Some(public_ip_str.clone());
-
-    println!("applied new state to activity lock");
 
     app.emit(
         "tunnel-status",
@@ -240,7 +256,8 @@ pub async fn stop_tunnel(
 pub async fn quick_connect(
     app: AppHandle,
     tunnel_state: State<'_, TunnelState>,
-    redirection_state: State<'_, RedirectionState>
+    redirection_state: State<'_, RedirectionState>,
+    tunnel_mode: TunnelMode,
 ) -> Result<ConnectResponse, String> {
     let configs = get_all_tunnels(&app)?;
 
@@ -251,7 +268,14 @@ pub async fn quick_connect(
     .await
     .map_err(|_| "Server selection timed out".to_string())??;
 
-    start_tunnel(app, tunnel_state, redirection_state, best_node.public_ip).await?;
+    start_tunnel(
+        app,
+        tunnel_state,
+        redirection_state,
+        best_node.public_ip,
+        tunnel_mode,
+    )
+    .await?;
 
     Ok(ConnectResponse {
         config_name: best_node.name.clone(),

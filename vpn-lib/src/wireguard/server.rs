@@ -9,6 +9,7 @@ use crate::{
 use base64::{Engine, engine::general_purpose};
 use rand_core::OsRng;
 use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Serialize};
 use std::{net::Ipv4Addr, path::Path};
 use x25519_dalek::{PublicKey, StaticSecret};
 
@@ -17,7 +18,7 @@ pub struct SetupResult {
     pub client_private_key: SecretString,
     pub server_public_key: String,
     pub client_ip: Ipv4Addr,
-    pub public_ip: Ipv4Addr
+    pub public_ip: Ipv4Addr,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -28,6 +29,13 @@ pub enum ServerError {
     KeyNotFound,
     #[error("Internal state error: {0}")]
     State(#[from] crate::wireguard::state::StateError),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum TunnelMode {
+    Full,
+    Split,
 }
 
 pub fn generate_keys() -> (SecretString, String) {
@@ -70,7 +78,13 @@ pub fn build_client_config(
     server_pub: &str,
     public_ip: Ipv4Addr,
     peer_ip: Ipv4Addr,
+    tunnel_mode: &TunnelMode,
 ) -> String {
+    let allowed_ips = match tunnel_mode {
+        TunnelMode::Full => "0.0.0.0/0",
+        TunnelMode::Split => "0.0.0.0/32",
+    };
+
     format!(
         r#"[Interface]
 PrivateKey = {client_priv}
@@ -80,7 +94,7 @@ DNS = 1.1.1.1
 [Peer]
 PublicKey = {server_pub}
 Endpoint = {public_ip}:51820
-AllowedIPs = 0.0.0.0/24
+AllowedIPs = {allowed_ips}
 "#
     )
 }
@@ -124,8 +138,12 @@ pub async fn setup_wireguard(
     let mut state = VpnState::new(server_pub.clone(), public_ip);
     state.peers.push(new_peer.clone());
 
-    let server_config =
-        build_server_config(&server_priv.expose_secret(), &new_peer.public_key, interface, new_peer.ip);
+    let server_config = build_server_config(
+        &server_priv.expose_secret(),
+        &new_peer.public_key,
+        interface,
+        new_peer.ip,
+    );
 
     run_remote_cmd(
         session,
@@ -141,7 +159,12 @@ pub async fn setup_wireguard(
 
     save_state(session, &state).await?;
 
-    Ok(SetupResult { client_private_key: peer_priv_key, server_public_key: server_pub, client_ip: new_peer.ip, public_ip })
+    Ok(SetupResult {
+        client_private_key: peer_priv_key,
+        server_public_key: server_pub,
+        client_ip: new_peer.ip,
+        public_ip,
+    })
 }
 
 pub async fn update_wireguard_config(session: &SshSession, state: &VpnState) -> anyhow::Result<()> {
