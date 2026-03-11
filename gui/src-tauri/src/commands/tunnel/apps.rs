@@ -8,7 +8,9 @@ use crate::commands::tunnel::RedirectionState;
 #[tauri::command]
 pub async fn update_tunneled_apps(state: tauri::State<'_, RedirectionState>, pids: Vec<u32>) -> Result<(), String> {
 
-	let guard = state.filter_rx.lock().await;
+	let guard = state.filter_tx.lock().await;
+
+	println!("update_tunnel_apps: received new pids {:?}", pids);
 
 	if let Some(tx) = &*guard {
 		tx.send(pids.clone()).map_err(|e| e.to_string())?;
@@ -20,6 +22,7 @@ pub async fn update_tunneled_apps(state: tauri::State<'_, RedirectionState>, pid
 
 		Ok(())
 	} else {
+		println!("No active redirection loop");
 		Err("No active redirection loop".into())
 	}
 

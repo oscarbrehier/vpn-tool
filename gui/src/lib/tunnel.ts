@@ -3,9 +3,10 @@ import { runCommand } from "./tauri";
 
 export type TunnelMode = "full" | "split"
 
-export interface TunnelStatus {
+export interface TunnelPayload {
 	name: string | null;
 	is_active: boolean;
+	mode: TunnelMode;
 };
 
 export interface TunnelMetadata {
@@ -73,7 +74,7 @@ export async function quickConnect(mode: TunnelMode): Promise<boolean> {
 };
 
 export async function getTunnelStatus() {
-	return await runCommand<TunnelStatus>("get_current_tunnel_status", true);
+	return await runCommand<TunnelPayload>("get_current_tunnel_status", true);
 }
 
 export async function getAvailableEndpoints(): Promise<UnifiedEndpoint[]> {

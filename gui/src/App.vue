@@ -5,7 +5,7 @@ import Map from "./components/Map.vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getGeoLocation } from "./lib/geo";
 import { listen } from "@tauri-apps/api/event";
-import { getAvailableEndpoints, getTunnelStatus, quickConnect, startTunnel, stopTunnel, TunnelMetadata, TunnelMode, UnifiedEndpoint } from "./lib/tunnel";
+import { getAvailableEndpoints, getTunnelStatus, quickConnect, startTunnel, stopTunnel, TunnelMetadata, TunnelMode, TunnelPayload, UnifiedEndpoint } from "./lib/tunnel";
 import { toast, Toaster } from 'vue-sonner';
 import 'vue-sonner/style.css'
 import Toolbar from "./components/Toolbar.vue";
@@ -15,11 +15,6 @@ import NodeSelector from "./components/NodeSelector.vue";
 import TunnelModeToggle from "./components/TunnelModeToggle.vue";
 import AppRouting from "./components/app_routing/AppRouting.vue";
 import SidePanel from "./components/SidePanel.vue";
-
-interface TunnelPayload {
-	name: string;
-	is_active: boolean;
-};
 
 const isConnected = ref(false);
 const isPending = ref(false);
@@ -78,10 +73,9 @@ onMounted(async () => {
 
 		const status = await invoke<TunnelPayload>('get_current_tunnel_status');
 
-		console.log(status);
-
 		isConnected.value = status.is_active;
 		activeTunnel.value = status.name;
+		tunnelMode.value = status.mode;
 
 	} catch (err) { }
 

@@ -10,10 +10,12 @@ use tauri::{
 };
 use tauri_plugin_dialog;
 use tauri_plugin_store::StoreExt;
+use vpn_lib::wireguard::server::TunnelMode;
 
 use crate::commands::{
     pinger::PingHandle,
-    state::{start_monitoring, sync_tunnel_state}, tunnel::RedirectionState,
+    state::{start_monitoring, sync_tunnel_state},
+    tunnel::RedirectionState,
 };
 
 #[derive(Default)]
@@ -21,21 +23,40 @@ struct AppCache {
     icons: DashMap<String, String>,
 }
 
-#[derive(Default)]
 pub struct TunnelState {
     pub active_tunnel: Mutex<Option<String>>,
+    pub mode: Mutex<TunnelMode>,
+}
+
+impl Default for TunnelState {
+    fn default() -> Self {
+        Self {
+            active_tunnel: Mutex::new(None),
+            mode: Mutex::new(TunnelMode::Full),
+        }
+    }
 }
 
 #[derive(Clone, Serialize)]
 pub struct TunnelPayload {
     pub name: Option<String>,
     pub is_active: bool,
+    pub mode: TunnelMode,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     dotenvy::dotenv().ok();
-    
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let _ = std::env::set_current_dir(exe_dir);
+        }
+    }
+
+    println!("Current Executable Dir: {:?}", std::env::current_exe());
+    println!("Current Working Dir: {:?}", std::env::current_dir());
+
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())

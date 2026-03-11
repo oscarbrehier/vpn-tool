@@ -187,23 +187,20 @@ pub async fn start_tunnel(
 
     vpn_lib::wireguard::client::start_tunnel(&config_path).map_err(|e| e.to_string())?;
 
-    let interface_i = vpn_lib::wireguard::interface::get_interface_index(client_ip)?;
-
-    println!("tunnel mode {:?}", tunnel_mode);
-
     match tunnel_mode {
-        TunnelMode::Full => {
-            println!("starting tunnel - all traffic");
-        }
+        TunnelMode::Full => {}
         TunnelMode::Split => {
-            println!("starting tunnel - pid filtering");
 
             let (tx, rx) = mpsc::unbounded_channel();
+            let wg_server_internal_ip = Ipv4Addr::new(10, 0, 0, 1);
+
             tokio::spawn(async move {
-                let _ = start_packet_redirection(Vec::new(), rx, client_ip, interface_i).await;
+                if let Err(e) = start_packet_redirection(Vec::new(), rx, wg_server_internal_ip).await {
+                    eprintln!("redirection task error {}", e);
+                }
             });
 
-            let mut filter_guard = redirection_state.filter_rx.lock().await;
+            let mut filter_guard = redirection_state.filter_tx.lock().await;
             *filter_guard = Some(tx);
         }
     }
@@ -211,11 +208,17 @@ pub async fn start_tunnel(
     let mut active_lock = tunnel_state.active_tunnel.lock().unwrap();
     *active_lock = Some(public_ip_str.clone());
 
+    drop(active_lock);
+
+    let mut mode_lock = tunnel_state.mode.lock().unwrap();
+    *mode_lock = tunnel_mode;
+
     app.emit(
         "tunnel-status",
         TunnelPayload {
             name: Some(public_ip_str),
             is_active: true,
+            mode: tunnel_mode
         },
     )
     .unwrap();
@@ -240,11 +243,14 @@ pub async fn stop_tunnel(
         }
     }
 
+    let current_mode = *state.mode.lock().unwrap();
+
     app.emit(
         "tunnel-status",
         TunnelPayload {
             name: None,
             is_active: false,
+            mode: current_mode  
         },
     )
     .unwrap();

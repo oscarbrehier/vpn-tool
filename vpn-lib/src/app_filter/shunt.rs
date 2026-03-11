@@ -5,10 +5,19 @@ use windivert_sys::ChecksumFlags;
 
 type ConnectionMap = HashMap<u16, Ipv4Addr>;
 
+fn is_non_routable(ip: Ipv4Addr) -> bool {
+    let octets = ip.octets();
+    ip.is_loopback()
+        || ip.is_multicast()
+        || octets[0] == 224
+        || octets[0] == 239
+        || ip.is_link_local()
+        || ip.is_broadcast()
+}
+
 fn handle_outbound(
     packet: &mut WinDivertPacket<'_, NetworkLayer>,
-    virtual_ip: Ipv4Addr,
-    interface_i: u32,
+    wg_server_internal_ip: Ipv4Addr,
     connections: &mut ConnectionMap,
 ) -> anyhow::Result<()> {
     let data = packet.data.to_mut();
@@ -17,12 +26,9 @@ fn handle_outbound(
         anyhow::bail!("Packet too short");
     }
 
-    let version = data[0] >> 4;
-    if version != 4 {
-        anyhow::bail!("IPv6 is not supporteed");
+    if data[0] >> 4 != 4 {
+        anyhow::bail!("Not IPv4");
     }
-
-    let original_ip = Ipv4Addr::from([data[12], data[13], data[14], data[15]]);
 
     let ihl = (data[0] & 0x0F) as usize * 4;
 
@@ -30,17 +36,26 @@ fn handle_outbound(
         anyhow::bail!("No transport header");
     }
 
-    let source_port = u16::from_be_bytes([data[ihl], data[ihl + 1]]);
+    let real_dest = Ipv4Addr::from([data[16], data[17], data[18], data[19]]);
 
-    connections.insert(source_port, original_ip);
+    if is_non_routable(real_dest) {
+        anyhow::bail!("Skip non-routable dst {}", real_dest);
+    }
 
-    let ip_bytes = virtual_ip.octets();
-    data[12..16].copy_from_slice(&ip_bytes);
+    let src_port = u16::from_be_bytes([data[ihl], data[ihl + 1]]);
 
-    packet.address.set_interface_index(interface_i);
-    packet.address.set_outbound(true);
+    connections.insert(src_port, real_dest);
+
+    data[16..20].copy_from_slice(&wg_server_internal_ip.octets());
+
+    packet.address.set_impostor(true);
 
     packet.recalculate_checksums(ChecksumFlags::new())?;
+
+    println!(
+        "out: src_port={} real_dest={} -> via wireguard",
+        src_port, real_dest
+    );
 
     anyhow::Ok(())
 }
@@ -63,35 +78,25 @@ fn handle_inbound(
 
     let dest_port = u16::from_be_bytes([data[ihl + 2], data[ihl + 3]]);
 
-    if let Some(original_ip) = connections.get(&dest_port) {
-        let ip_bytes = original_ip.octets();
-        data[16..20].copy_from_slice(&ip_bytes);
+    if let Some(real_dest) = connections.get(&dest_port) {
+        data[12..16].copy_from_slice(&real_dest.octets());
 
-        packet.address.set_interface_index(0);
-        packet.address.set_outbound(false);
+        packet.address.set_impostor(true);
 
         packet.recalculate_checksums(ChecksumFlags::new())?;
+
+        println!("in : port={} restored src={}", dest_port, real_dest);
     } else {
-        anyhow::bail!("No tracking entry for port {}", dest_port);
+        anyhow::bail!("No entry for dest_port {}", dest_port);
     }
 
     Ok(())
 }
 
-fn build_filter_string(pids: &[u32], virtual_ip: Ipv4Addr) -> String {
-    if pids.is_empty() {
-        return "false".into();
-    };
-
-    let pid_conditions: String = pids
-        .iter()
-        .map(|pid| format!("processId === {}", pid))
-        .collect::<Vec<_>>()
-        .join(" or ");
-
+fn build_filter_string(wg_internal_ip: Ipv4Addr) -> String {
     format!(
-        "(outbound and ({})) or (inbound and ip.DstAddr == {})",
-        pid_conditions, virtual_ip
+        "(outbound and ip and not impostor) or (inbound and ip.SrcAddr == {} and not impostor)",
+        wg_internal_ip
     )
 }
 
@@ -99,40 +104,50 @@ fn build_filter_string(pids: &[u32], virtual_ip: Ipv4Addr) -> String {
 pub async fn start_packet_redirection(
     initial_pids: Vec<u32>,
     mut filter_rx: mpsc::UnboundedReceiver<Vec<u32>>,
-    virtual_ip: Ipv4Addr,
-    interface_i: u32,
+    wg_server_internal_ip: Ipv4Addr,
 ) -> anyhow::Result<()> {
-    use windivert::{WinDivert, prelude::WinDivertFlags};
+    use windivert::{WinDivert, layer::NetworkLayer, prelude::WinDivertFlags};
 
-    let mut connections = ConnectionMap::new();
-    let mut current_filter = build_filter_string(&initial_pids, virtual_ip);
+    std::thread::spawn(move || {
+        let mut connections = ConnectionMap::new();
+        let mut buffer = [0u8; 65535];
+        let mut current_divert: Option<WinDivert<NetworkLayer>> = None;
 
-    let mut divert = WinDivert::network(&current_filter, 0, WinDivertFlags::default())
-        .map_err(|e| anyhow::anyhow!("Windivert Error: {}", e))?;
+        let filter = build_filter_string(wg_server_internal_ip);
 
-    let mut buffer = [0u8; 65535];
+        if !initial_pids.is_empty() {
+            current_divert = WinDivert::network(&filter, 0, WinDivertFlags::default()).ok();
+        }
 
-    loop {
-        tokio::select! {
-
-            Some(new_pids) = filter_rx.recv() => {
-
-                current_filter = build_filter_string(&new_pids, virtual_ip);
-
-                // update divert handle with new filters
-                divert = WinDivert::network(&current_filter, 0, WinDivertFlags::default()).map_err(|e| anyhow::anyhow!("Windivert Error: {}", e))?;
-
+        loop {
+            if current_divert.is_none() {
+                if let Some(new_pids) = filter_rx.blocking_recv() {
+                    if !new_pids.is_empty() {
+                        current_divert =
+                            WinDivert::network(&filter, 0, WinDivertFlags::default()).ok();
+                    }
+                } else {
+                    break;
+                }
             }
 
-            packet = async { divert.recv(Some(&mut buffer)) } => {
+            if current_divert.is_some() {
+                while let Ok(new_pids) = filter_rx.try_recv() {
+                    if new_pids.is_empty() {
+                        current_divert = None;
+                        break;
+                    }
+                }
+            }
 
-                let mut wd_packet = match packet {
+            if let Some(divert) = current_divert.as_mut() {
+                let mut wd_packet = match divert.recv(Some(&mut buffer)) {
                     Ok(p) => p,
                     Err(_) => continue,
                 };
 
                 let result = if wd_packet.address.outbound() {
-                    handle_outbound(&mut wd_packet, virtual_ip, interface_i, &mut connections)
+                    handle_outbound(&mut wd_packet, wg_server_internal_ip, &mut connections)
                 } else {
                     handle_inbound(&mut wd_packet, &connections)
                 };
@@ -140,11 +155,11 @@ pub async fn start_packet_redirection(
                 if result.is_ok() {
                     let _ = divert.send(&wd_packet);
                 }
-
             }
-
         }
-    }
+    });
+
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
@@ -152,7 +167,7 @@ pub async fn start_packet_redirection(
     target_pids: Vec<u32>,
     mut filter_rx: mpsc::UnboundedReceiver<Vec<u32>>,
 ) -> Result<(), String> {
-    // utun
+    Ok(())
 }
 
 #[cfg(target_os = "linux")]
@@ -160,5 +175,5 @@ pub async fn start_packet_redirection(
     target_pids: Vec<u32>,
     mut filter_rx: mpsc::UnboundedReceiver<Vec<u32>>,
 ) -> Result<(), String> {
-    // netlink
+    Ok(())
 }

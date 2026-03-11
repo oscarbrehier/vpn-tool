@@ -25,14 +25,23 @@ pub fn start_monitoring(app: AppHandle) {
 
                     if missing_strikes >= 2 {
                         let state = app.state::<TunnelState>();
-                        let mut active_lock = state.active_tunnel.lock().unwrap();
-                        *active_lock = None;
+
+                        {
+                            let mut active_lock = state.active_tunnel.lock().unwrap();
+                            *active_lock = None;
+                        }
+
+                        let current_mode = {
+                            let lock = state.mode.lock().unwrap();
+                            *lock
+                        };
 
                         app.emit(
                             "tunnel-status",
                             TunnelPayload {
                                 name: None,
                                 is_active: false,
+                                mode: current_mode,
                             },
                         )
                         .unwrap();
@@ -56,16 +65,22 @@ pub async fn sync_tunnel_state(app: AppHandle) {
     if let Ok(tunnels) = get_all_tunnels(&app) {
         for tunnel in tunnels {
             if is_tunnel_active(tunnel.name.clone()) {
-                let mut active_lock = state.active_tunnel.lock().unwrap();
-                *active_lock = Some(tunnel.name.clone());
+                let name = {
+                    let lock = state.active_tunnel.lock().unwrap();
+                    lock.clone()
+                };
 
-                println!("Found active tunnel: {}", tunnel.name);
+                let mode = {
+                    let lock = state.mode.lock().unwrap();
+                    *lock
+                };
 
                 app.emit(
                     "tunnel-status",
                     TunnelPayload {
-                        name: Some(tunnel.name),
+                        name: name,
                         is_active: true,
+                        mode,
                     },
                 )
                 .unwrap();
@@ -78,9 +93,19 @@ pub async fn sync_tunnel_state(app: AppHandle) {
 
 #[tauri::command]
 pub fn get_current_tunnel_status(state: tauri::State<'_, TunnelState>) -> TunnelPayload {
-    let lock = state.active_tunnel.lock().unwrap();
+    let name = {
+        let lock = state.active_tunnel.lock().unwrap();
+        lock.clone()
+    };
+
+    let mode = {
+        let lock = state.mode.lock().unwrap();
+        *lock
+    };
+
     TunnelPayload {
-        is_active: lock.is_some(),
-        name: lock.clone(),
+        is_active: name.is_some(),
+        name,
+        mode,
     }
 }

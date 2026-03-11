@@ -82,7 +82,7 @@ pub fn build_client_config(
 ) -> String {
     let allowed_ips = match tunnel_mode {
         TunnelMode::Full => "0.0.0.0/0",
-        TunnelMode::Split => "0.0.0.0/32",
+        TunnelMode::Split => "0.0.0.0/24",
     };
 
     format!(
