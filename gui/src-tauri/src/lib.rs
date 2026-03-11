@@ -15,7 +15,7 @@ use vpn_lib::wireguard::server::TunnelMode;
 use crate::commands::{
     pinger::PingHandle,
     state::{start_monitoring, sync_tunnel_state},
-    tunnel::RedirectionState,
+    tunnel::{self, RedirectionState},
 };
 
 #[derive(Default)]
@@ -140,6 +140,32 @@ pub fn run() {
                 api.prevent_close();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+
+                let handle = app_handle.clone();
+
+                tauri::async_runtime::block_on(async move {
+
+                    let tunnel_state = handle.state::<TunnelState>();
+                    let redirection_state = handle.state::<RedirectionState>();
+
+                    let mode = { *tunnel_state.mode.lock().unwrap() };
+                    if mode == TunnelMode::Split {
+
+                        let mut tx_lock = redirection_state.filter_tx.lock().await;
+                        if let Some(tx) = tx_lock.take() {
+                            let _ = tx.send(Vec::new());
+                        }
+
+                    }
+
+                    let _ = commands::tunnel::stop_tunnel(handle.clone(), tunnel_state).await;
+
+                });
+
+            }
+        });
 }
