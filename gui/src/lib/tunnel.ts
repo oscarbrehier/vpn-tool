@@ -80,8 +80,8 @@ export async function getTunnelStatus() {
 export async function getAvailableEndpoints(): Promise<UnifiedEndpoint[]> {
 
 	const { data: confs, error } = await runCommand<TunnelMetadata[]>("get_configs", true);
-
-	if (!error || !confs) return [];
+	
+	if (error || !confs) return [];
 
 	const locationsPromises = (confs as TunnelMetadata[]).map(async (conf) => {
  

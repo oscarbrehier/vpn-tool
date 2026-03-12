@@ -18,13 +18,13 @@ const emits = defineEmits<{
 
 		<div class="h-auto w-auto absolute top-0 right-0 z-60 p-4 space-x-4 flex items-center justify-end select-none">
 
-			<div class="mr-12 flex space-x-4">
+			<!-- <div class="mr-12 flex space-x-4">
 			
 				<button @click="$emit('open-routing')">
 					<LayoutGrid />
 				</button>
 
-			</div>
+			</div> -->
 
 			<button @click="minimize">
 				<Minus />

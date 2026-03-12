@@ -191,7 +191,7 @@ function toggleAppRoutingPanel() {
 					</span>
 				</button>
 
-				<TunnelModeToggle :mode="tunnelMode" @set-mode="setTunnelMode" />
+				<!-- <TunnelModeToggle :mode="tunnelMode" @set-mode="setTunnelMode" /> -->
 
 			</div>
 

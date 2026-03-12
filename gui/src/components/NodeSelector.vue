@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { Plus, Search, X } from 'lucide-vue-next';
-import { UnifiedEndpoint } from '../App.vue';
-import { TunnelMetadata } from '../lib/tunnel';
-import { computed, onUnmounted, ref, watch } from 'vue';
+import { TunnelMetadata, UnifiedEndpoint } from '../lib/tunnel';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import NewConfigurationModal from './NewConfigurationModal.vue';
 
 const props = defineProps<{
@@ -54,6 +53,10 @@ function handleConfigSuccess() {
 	configurrationModal.value = false;
 	emit("refresh");
 }
+
+onMounted(() => {
+	console.log(props.endpoints)
+})
 
 watch(() => props.isOpen, (isOpen) => {
 
