@@ -132,6 +132,8 @@ async function placePointsOnMap() {
 
 	const configs = await getConfigurations();
 
+	console.log("configs", configs);
+
 	const mapMarkers = configs.map((conf) => {
 
 		if (!conf.location) return;

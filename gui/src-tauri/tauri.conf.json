@@ -1,48 +1,46 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "vpn",
-  "version": "0.1.0",
-  "identifier": "com.user.vpn",
-  "build": {
-    "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
-    "frontendDist": "../dist"
-  },
-  "app": {
-    "windows": [
-      {
-        "visible": false,
-        "title": "vpn",
-        "width": 1160,
-        "height": 600,
-        "decorations": false,
-        "transparent": true,
-        "center": true
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "windows": {
-      "certificateThumbprint": null,
-      "digestAlgorithm": "sha256",
-      "timestampUrl": "",
-      "webviewInstallMode": {
-        "type": "downloadBootstrapper"
-      }
-    },
-    "active": true,
-    "targets": "all",
-    "resources": ["conf/*"],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ]
-  }
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "vpn",
+	"version": "0.1.0",
+	"identifier": "com.user.vpn",
+	"build": {
+		"beforeDevCommand": "pnpm dev",
+		"devUrl": "http://localhost:1420",
+		"beforeBuildCommand": "pnpm build",
+		"frontendDist": "../dist"
+	},
+	"app": {
+		"windows": [
+			{
+				"visible": false,
+				"title": "vpn",
+				"width": 1160,
+				"height": 600,
+				"decorations": false,
+				"transparent": true,
+				"center": true
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"externalBin": [
+			"binaries/sidecar"
+		],
+		"active": true,
+		"targets": "all",
+		"resources": [
+			"conf/*",
+			".env"
+		],
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		]
+	}
 }

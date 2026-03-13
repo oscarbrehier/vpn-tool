@@ -26,7 +26,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 vpn-lib = { path = "../../vpn-lib" }
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "devtools"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -42,6 +42,7 @@ secrecy = "0.10.3"
 tauri-plugin-store = "2"
 dirs = "6.0.0"
 dashmap = "6.1.0"
+tauri-plugin-shell = "2.3.5"
 
 [target.'cfg(not(windows))'.dependencies]
 keyring = "3.6.3"
@@ -49,5 +50,9 @@ keyring = "3.6.3"
 [target.'cfg(windows)'.dependencies]
 windows-dpapi = "0.1.0"
 
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "2"
+
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2.5.1"
+tauri-plugin-single-instance = "2.4.0"

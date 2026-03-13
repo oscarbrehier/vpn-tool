@@ -30,8 +30,7 @@ export async function getConfigurations(): Promise<TunnelMetadata[]> {
 
 	const locationsPromises = confs.map(async (conf) => {
 
-		const ip = conf.name.split("-")[1];
-
+		const ip = conf.public_ip;
 		const res = await getGeoLocation(ip);
 
 		if (!res) return null;
@@ -85,7 +84,7 @@ export async function getAvailableEndpoints(): Promise<UnifiedEndpoint[]> {
 
 	const locationsPromises = (confs as TunnelMetadata[]).map(async (conf) => {
  
-		const ip = conf.name.split("-")[1];
+		const ip = conf.public_ip;
 		const res = await getGeoLocation(ip);
 
 		if (!res) return null;

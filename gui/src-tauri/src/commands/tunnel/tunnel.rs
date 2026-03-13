@@ -1,24 +1,22 @@
 use std::{
     fs,
     net::Ipv4Addr,
-    path::{Path, PathBuf},
-    process::Command,
+    path::{PathBuf},
     str::FromStr,
 };
 
+use vpn_lib::utils::create_command;
 use secrecy::ExposeSecret;
-use serde::{Deserialize, Serialize};
+use serde::{Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
-use tokio::{sync::mpsc, time::timeout};
+use tokio::{time::timeout};
 use vpn_lib::{
     self,
-    app_filter::shunt::start_packet_redirection,
     network::ping_endpoint,
     ssh::{connect_ssh, harden_ssh},
     validate_key_file,
     wireguard::{
-        client::list_local_configs,
         server::{build_client_config, setup_wireguard, TunnelMode},
     },
 };
@@ -90,19 +88,20 @@ pub async fn toggle_vpn(connect: bool) -> Result<bool, String> {
 
     #[cfg(target_os = "windows")]
     {
-        cmd = Command::new("wg-quick");
+
+        cmd = create_command("wg-quick");
         cmd.arg(action).arg(interface);
     }
 
     #[cfg(target_os = "linux")]
     {
-        cmd = Command::new("pkexec");
+        cmd = create_command("pkexec");
         cmd.arg("wg-quick").arg(action).arg(interface);
     }
 
     #[cfg(target_os = "macos")]
     {
-        cmd = Command::new("osascript");
+        cmd = create_command("osascript");
         cmd.arg("-e").arg(format!(
             "do shell script \"wg-quick {} {}\" with administrator privileges",
             action, interface
@@ -125,7 +124,7 @@ pub fn is_tunnel_active(name: String) -> bool {
     #[cfg(target_os = "windows")]
     {
         let service_name = format!("WireGuardTunnel${}", name);
-        let output = std::process::Command::new("sc")
+        let output = create_command("sc")
             .args(["query", &service_name])
             .output();
 
@@ -139,7 +138,7 @@ pub fn is_tunnel_active(name: String) -> bool {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let output = std::process::Command::new("wg")
+        let output = create_command("wg")
             .args(["show", &name])
             .output();
         output.map(|o| o.status.success()).unwrap_or(false)
@@ -187,25 +186,6 @@ pub async fn start_tunnel(
         .map_err(|e| format!("Failed to write temp config: {}", e))?;
 
     vpn_lib::wireguard::client::start_tunnel(&config_path).map_err(|e| e.to_string())?;
-
-    match tunnel_mode {
-        TunnelMode::Full => {}
-        TunnelMode::Split => {
-            let (tx, rx) = mpsc::unbounded_channel();
-            let wg_server_internal_ip = Ipv4Addr::new(10, 0, 0, 1);
-
-            tokio::spawn(async move {
-                if let Err(e) =
-                    start_packet_redirection(Vec::new(), rx, wg_server_internal_ip).await
-                {
-                    eprintln!("redirection task error {}", e);
-                }
-            });
-
-            let mut filter_guard = redirection_state.filter_tx.lock().await;
-            *filter_guard = Some(tx);
-        }
-    }
 
     let mut active_lock = tunnel_state.active_tunnel.lock().unwrap();
     *active_lock = Some(public_ip_str.clone());

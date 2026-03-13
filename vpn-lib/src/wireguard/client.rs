@@ -2,6 +2,8 @@ use std::{fs, path::Path, process::Command};
 
 use anyhow::Context;
 
+use crate::utils::create_command;
+
 pub fn list_local_configs(conf_dir: &Path) -> anyhow::Result<Vec<String>> {
     let mut configs = Vec::new();
 
@@ -41,7 +43,7 @@ pub fn start_tunnel(conf_path: &Path) -> anyhow::Result<()> {
         ("wg-quick", vec!["up", conf_path.to_str().unwrap()])
     };
 
-    let output = Command::new(bin)
+    let output = create_command(bin)
         .args(&args)
         .output()
         .context("Failed to execute WireGuard command")?;
@@ -65,7 +67,7 @@ pub fn stop_tunnel(conf_name: &str) -> anyhow::Result<()> {
         ("wg-quick", vec!["down", conf_name])
     };
 
-    let output = Command::new(bin)
+    let output = create_command(bin)
         .args(&args)
         .output()
         .context("Failed to execute WireGuard command")?;

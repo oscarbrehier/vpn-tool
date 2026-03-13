@@ -1,4 +1,5 @@
 mod commands;
+mod sidecar_bridge;
 
 use dashmap::DashMap;
 use serde::Serialize;
@@ -58,18 +59,34 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell)
         .manage(AppCache::default())
         .manage(TunnelState::default())
         .manage(PingHandle(Mutex::new(None)))
         .manage(RedirectionState::default())
         .setup(|app| {
+            #[cfg(desktop)]
+            let _ = app.handle().plugin(tauri_plugin_single_instance::init(|app, args, cwd| {}));
+
+            #[cfg(debug_assertions)]
+            {
+                let window = app.get_webview_window("main").unwrap();
+                window.open_devtools();
+            }
+
+            let resource_path = app
+                .path()
+                .resolve(".env", tauri::path::BaseDirectory::Resource)?;
+            dotenvy::from_path(resource_path).ok();
+
             let data_dir = app
                 .path()
                 .app_local_data_dir()
                 .expect("failed to get data dir");
             std::fs::create_dir_all(&data_dir).ok();
 
-            let _store = app.store("tunnels.json")?;
+            let store_path = data_dir.join("tunnels.json");
+            let _store = app.store(store_path)?;
 
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -120,12 +137,6 @@ pub fn run() {
                 }
             }
 
-            #[cfg(desktop)]
-            app.handle().plugin(tauri_plugin_autostart::init(
-                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-                Some(vec!["--minimized"]),
-            ))?;
-
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -139,10 +150,7 @@ pub fn run() {
             commands::state::get_current_tunnel_status,
             commands::geo::get_geo_info,
             commands::pinger::start_ping_loop,
-            commands::pinger::stop_ping_loop,
-            commands::tunnel::apps::fetch_apps,
-            commands::tunnel::apps::update_tunneled_apps,
-            commands::tunnel::apps::get_tunneled_apps,
+            commands::pinger::stop_ping_loop
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

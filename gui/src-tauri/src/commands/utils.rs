@@ -1,5 +1,7 @@
 use secrecy::{ExposeSecret, SecretString};
-use std::net::Ipv4Addr;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+use std::{net::Ipv4Addr, process::Command};
 use tauri::AppHandle;
 
 pub async fn save_key_securely(
