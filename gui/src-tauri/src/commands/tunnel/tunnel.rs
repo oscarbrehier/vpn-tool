@@ -22,14 +22,12 @@ use vpn_lib::{
 };
 
 use crate::{
-    commands::{
+    TunnelPayload, TunnelState, commands::{
         tunnel::{
-            metadata::{get_all_tunnels, save_metadata_to_store, TunnelMetadata},
-            RedirectionState,
+            RedirectionState, metadata::{TunnelMetadata, get_all_tunnels, save_metadata_to_store}
         },
         utils::{load_key_securely, save_key_securely},
-    },
-    TunnelPayload, TunnelState,
+    }, sidecar_bridge::run_sidecar_command
 };
 
 #[derive(Serialize)]
@@ -185,7 +183,13 @@ pub async fn start_tunnel(
     fs::write(&config_path, wg_config)
         .map_err(|e| format!("Failed to write temp config: {}", e))?;
 
-    vpn_lib::wireguard::client::start_tunnel(&config_path).map_err(|e| e.to_string())?;
+    // vpn_lib::wireguard::client::start_tunnel(&config_path).map_err(|e| e.to_string())?;
+
+    let response = run_sidecar_command(app.clone(), vec!["start", "--config", &config_path.to_string_lossy().to_string()]).await?;
+
+    if !response.success {
+        return Err(response.message);
+    }
 
     let mut active_lock = tunnel_state.active_tunnel.lock().unwrap();
     *active_lock = Some(public_ip_str.clone());

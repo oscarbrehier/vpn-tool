@@ -30,10 +30,6 @@ pub fn start_tunnel(conf_path: &Path) -> anyhow::Result<()> {
 
     let clean_path = path_str.strip_prefix(r#"\\?\"#).unwrap_or(path_str);
 
-    println!("Cleaned Path for WireGuard: {}", clean_path);
-
-    println!("{}", clean_path);
-
     let (bin, args) = if cfg!(target_os = "windows") {
         (
             "C:\\Program Files\\WireGuard\\wireguard.exe",

@@ -18,6 +18,7 @@ export async function runCommand<T>(cmd: string, notifyError: boolean = false, a
 
 		if (notifyError) toast(message);
 
+		console.log(message);
 		return { data: null, error: message };
 
 	};

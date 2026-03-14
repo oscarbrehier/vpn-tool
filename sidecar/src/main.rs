@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::{io::{self, Write}, path::PathBuf};
 
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,12 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
-enum Commands {}
+enum Commands {
+    Start {
+        #[arg(short, long)]
+        config: PathBuf
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 struct Response {
@@ -66,6 +71,19 @@ fn is_elevated() -> bool {
     unsafe { libc::geteuid() == 0 }
 }
 
+fn handle_start(config_path: PathBuf) -> Response {
+
+    if !config_path.exists() {
+        return Response { success: false, message: format!("Config file not found: {:?}", config_path), data: None };
+    }
+
+    match vpn_lib::wireguard::client::start_tunnel(&config_path) {
+        Ok(_) => Response { success: true, message: "Tunnel started".into(), data: None },
+        Err(e) => Response { success: false, message: format!("Failed to start tunnel: {}", e), data: None }
+    }
+
+}
+
 fn main() {
     let cli = Cli::parse();
 
@@ -79,7 +97,9 @@ fn main() {
         std::process::exit(1);
     }
 
-    let response = match cli.command {};
+    let response = match cli.command {
+        Commands::Start { config } => handle_start(config),
+    };
 
     send_response(response);
 }
