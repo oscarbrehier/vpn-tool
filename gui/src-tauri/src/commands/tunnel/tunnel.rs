@@ -211,23 +211,12 @@ pub async fn start_tunnel(
 pub async fn stop_tunnel(
     app: AppHandle,
     tunnel_state: tauri::State<'_, TunnelState>,
-    redirection_state: tauri::State<'_, RedirectionState>,
 ) -> Result<(), String> {
     let (mode, active_ip) = {
         let mut active_lock = tunnel_state.active_tunnel.lock().unwrap();
         let mode_lock = tunnel_state.mode.lock().unwrap();
         (*mode_lock, active_lock.take())
     };
-
-    if mode == TunnelMode::Split {
-        let mut tx_lock = redirection_state.filter_tx.lock().await;
-        if let Some(tx) = tx_lock.take() {
-            let _ = tx.send(Vec::new());
-        }
-
-        let mut pids = redirection_state.tunneled_pids.lock().await;
-        pids.clear();
-    }
 
     if let Some(ip) = active_ip {
         vpn_lib::wireguard::client::stop_tunnel(&ip).map_err(|e| e.to_string())?;

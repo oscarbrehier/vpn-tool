@@ -50,7 +50,7 @@ export async function getConfigurations(): Promise<TunnelMetadata[]> {
 export async function removeConfiguration(metadata: TunnelMetadata): Promise<Boolean> {
 
 	const { error } = await runCommand("remove_config", true, {
-		key: metadata.public_ip
+		config: metadata
 	});
 
 	return !error;

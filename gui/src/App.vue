@@ -11,9 +11,9 @@ import 'vue-sonner/style.css'
 import Toolbar from "./components/Toolbar.vue";
 import { startPinging, stopPinging } from "./lib/network";
 import { Loader2, ServerCog } from "lucide-vue-next";
-import NodeSelector from "./components/NodeSelector.vue";
 import AppRouting from "./components/app_routing/AppRouting.vue";
 import SidePanel from "./components/SidePanel.vue";
+import TunnelSelector from "./components/TunnelSelector.vue";
 
 const isConnected = ref(false);
 const isPending = ref(false);
@@ -36,10 +36,6 @@ const availableEndpoints = ref<UnifiedEndpoint[]>([]);
 
 const activePanel = ref<"nodeSelector" | "appRouting" | null>(null);
 const tunnelMode = ref<TunnelMode>("full");
-
-// const setTunnelMode = (newMode: TunnelMode) => {
-// 	tunnelMode.value = newMode;
-// };
 
 async function toggleConnection() {
 
@@ -135,7 +131,7 @@ async function connectTo(conf: TunnelMetadata) {
 	try {
 
 		await startTunnel(conf, tunnelMode.value);
-		serverSelection.value = false;
+		// serverSelection.value = false;
 
 	} finally {
 		isPending.value = false;
@@ -239,7 +235,7 @@ async function deleteConfig(config: TunnelMetadata) {
 			<AppRouting :mode="tunnelMode" />
 		</SidePanel>
 
-		<NodeSelector :isOpen="serverSelection" :endpoints="availableEndpoints" :activeTunnel="activeTunnel"
+		<TunnelSelector :isOpen="serverSelection" :endpoints="availableEndpoints" :activeTunnel="activeTunnel"
 			:isPending="isPending" @close="serverSelection = false" @connect="connectTo" @refresh="refreshEndpoints"
 			@delete="deleteConfig" />
 

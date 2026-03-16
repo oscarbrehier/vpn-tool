@@ -172,7 +172,6 @@ pub fn run() {
                     let _ = commands::tunnel::stop_tunnel(
                         handle.clone(),
                         tunnel_state,
-                        redirection_state,
                     )
                     .await;
                 });
