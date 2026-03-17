@@ -1,5 +1,4 @@
 mod commands;
-mod sidecar_bridge;
 
 use dashmap::DashMap;
 use serde::Serialize;
@@ -15,8 +14,7 @@ use vpn_lib::wireguard::server::TunnelMode;
 
 use crate::commands::{
     pinger::PingHandle,
-    state::{start_monitoring, sync_tunnel_state},
-    tunnel::{self, RedirectionState},
+    state::{start_monitoring, sync_tunnel_state}
 };
 
 #[derive(Default)]
@@ -63,16 +61,15 @@ pub fn run() {
         .manage(AppCache::default())
         .manage(TunnelState::default())
         .manage(PingHandle(Mutex::new(None)))
-        .manage(RedirectionState::default())
         .setup(|app| {
             #[cfg(desktop)]
             let _ = app.handle().plugin(tauri_plugin_single_instance::init(|app, args, cwd| {}));
 
-            #[cfg(debug_assertions)]
-            {
-                let window = app.get_webview_window("main").unwrap();
-                window.open_devtools();
-            }
+            // #[cfg(debug_assertions)]
+            // {
+            //     let window = app.get_webview_window("main").unwrap();
+            //     window.open_devtools();
+            // }
 
             let resource_path = app
                 .path()
@@ -167,7 +164,6 @@ pub fn run() {
 
                 tauri::async_runtime::block_on(async move {
                     let tunnel_state = handle.state::<TunnelState>();
-                    let redirection_state = handle.state::<RedirectionState>();
 
                     let _ = commands::tunnel::stop_tunnel(
                         handle.clone(),

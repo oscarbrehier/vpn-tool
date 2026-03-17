@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Plus, Search, Trash2, X } from 'lucide-vue-next';
+import { Trash2, X } from 'lucide-vue-next';
 import { TunnelMetadata, UnifiedEndpoint } from '../lib/tunnel';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import NewConfigurationModal from './NewConfigurationModal.vue';
 
 const props = defineProps<{

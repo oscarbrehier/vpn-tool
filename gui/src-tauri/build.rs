@@ -1,39 +1,46 @@
-use std::env;
-use std::path::PathBuf;
-
 fn main() {
-    let target = env::var("TARGET").unwrap();
-    let profile = env::var("PROFILE").unwrap();
-
-    let sidecar_src = PathBuf::from("../../target")
-        .join(&profile)
-        .join(if cfg!(windows) {
-            "sidecar.exe"
-        } else {
-            "sidecar"
-        });
-
-    if !sidecar_src.exists() {
-        panic!("Sidecar binary not found");
+    #[cfg(windows)]
+    {
+        let mut windows = tauri_build::WindowsAttributes::new();
+        windows = windows.app_manifest(
+            r#"
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity
+    version="1.0.0.0"
+    processorArchitecture="*"
+    name="VPN"
+    type="win32"
+  />
+  <description>VPN Application</description>
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+        type="win32"
+        name="Microsoft.Windows.Common-Controls"
+        version="6.0.0.0"
+        processorArchitecture="*"
+        publicKeyToken="6595b64144ccf1df"
+        language="*"
+      />
+    </dependentAssembly>
+  </dependency>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>
+"#,
+        );
+        tauri_build::try_build(tauri_build::Attributes::new().windows_attributes(windows))
+            .expect("failed to run build script");
     }
 
-    let ext = if target.contains("windows") {
-        ".exe"
-    } else {
-        ""
-    };
-    let sidecar_name = format!("sidecar-{}{}", target, ext);
-
-    std::fs::create_dir_all("binaries").unwrap();
-    let bundle_path = PathBuf::from("binaries").join(&sidecar_name);
-    std::fs::copy(&sidecar_src, &bundle_path).expect("Failed to copy to binaries");
-
-    let dev_path = PathBuf::from("../../target")
-        .join(&profile)
-        .join(&sidecar_name);
-    std::fs::copy(&sidecar_src, &dev_path).ok();
-
-    println!("cargo:rerun-if-changed=../../sidecar");
-
-    tauri_build::build();
+    #[cfg(not(windows))]
+    {
+        tauri_build::build();
+    }
 }

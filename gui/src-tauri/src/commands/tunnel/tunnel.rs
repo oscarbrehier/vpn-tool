@@ -18,12 +18,10 @@ use crate::commands::tunnel::metadata::get_store_path;
 use crate::{
     commands::{
         tunnel::{
-            metadata::{get_all_tunnels, save_metadata_to_store, TunnelMetadata},
-            RedirectionState,
+            metadata::{get_all_tunnels, save_metadata_to_store, TunnelMetadata}
         },
         utils::{load_key_securely, save_key_securely},
     },
-    sidecar_bridge::run_sidecar_command,
     TunnelPayload, TunnelState,
 };
 
@@ -132,7 +130,6 @@ pub fn is_tunnel_active(name: String) -> bool {
 pub async fn start_tunnel(
     app: AppHandle,
     tunnel_state: tauri::State<'_, TunnelState>,
-    redirection_state: tauri::State<'_, RedirectionState>,
     public_ip: Ipv4Addr,
     tunnel_mode: TunnelMode,
 ) -> Result<(), String> {
@@ -170,21 +167,7 @@ pub async fn start_tunnel(
     fs::write(&config_path, wg_config)
         .map_err(|e| format!("Failed to write temp config: {}", e))?;
 
-    // vpn_lib::wireguard::client::start_tunnel(&config_path).map_err(|e| e.to_string())?;
-
-    let response = run_sidecar_command(
-        app.clone(),
-        vec![
-            "start",
-            "--config",
-            &config_path.to_string_lossy().to_string(),
-        ],
-    )
-    .await?;
-
-    if !response.success {
-        return Err(response.message);
-    }
+    vpn_lib::wireguard::client::start_tunnel(&config_path).map_err(|e| e.to_string())?;
 
     let mut active_lock = tunnel_state.active_tunnel.lock().unwrap();
     *active_lock = Some(public_ip_str.clone());
@@ -245,7 +228,6 @@ pub async fn stop_tunnel(
 pub async fn quick_connect(
     app: AppHandle,
     tunnel_state: State<'_, TunnelState>,
-    redirection_state: State<'_, RedirectionState>,
     tunnel_mode: TunnelMode,
 ) -> Result<ConnectResponse, String> {
     let configs = get_all_tunnels(&app)?;
@@ -260,7 +242,6 @@ pub async fn quick_connect(
     start_tunnel(
         app,
         tunnel_state,
-        redirection_state,
         best_node.public_ip,
         tunnel_mode,
     )

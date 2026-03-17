@@ -1,7 +1,6 @@
 [workspace]
 members = [
 	"vpn-lib",
-	"gui/src-tauri",
-	"sidecar"
+	"gui/src-tauri"
 	]
 resolver = "2"
